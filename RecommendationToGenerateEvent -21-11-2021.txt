@@ -1,0 +1,64 @@
+/*
+* @author: Urvashi
+*
+* @date:
+*
+* @description: Recommendation Generator class for Account record Page
+*/
+global class RecommendationToGenerateEvent {
+ @InvocableMethod(label='Recommendation Generator to create Event'
+                     description='This function returns recommendations to create Event.')
+    
+/*
+* @author: Urvashi
+*
+* @date:
+*
+* @description: Generating Recommendations for Creating Event which was product age > 7 Years.
+*
+* @param inputRequests: List of recommendations for accounts.
+*
+* @return List of Recommendations
+*/
+    global static List<List<Recommendation>> getRecs(List<RecommendationGenerateRequest> inputRequests)
+    {
+        List<List<Recommendation>> outputs = new List<List<Recommendation>>();
+        set<String> setAccId = New set<String>();
+        Map<Id,Account> accountMap = New Map<Id,Account>();
+        
+        for (RecommendationGenerateRequest inputRequest : inputRequests) {
+            setAccId.add(inputRequest.accId);
+        }
+        
+        for(Account accRec : [ SELECT Id,LastActivityDate,LastModifiedDate,Name,
+                                  ( SELECT Id,Name,Asset_Age_Calculator__c,Acc_Region__c,Status,ProductFamily FROM Assets WHERE Asset_Age_Calculator__c > 7 AND Acc_Region__c = 'JAPN'
+                                   AND Status = 'Active' AND ProductFamily = 'PHACO EQUIPMENT') FROM Account
+                                  WHERE Id IN:setAccId AND Region__c = 'JAPN' AND Record_Type_Name__c = 'Customer Account' 
+                              AND Status__c in ('Active', 'Opeあり', 'Opeあり 件数不明')]){
+            accountMap.put(accRec.Id,accRec);
+        }
+                
+        List<Recommendation> recs = new List<Recommendation>();
+        for(Id idInst : accountMap.Keyset()){
+            for(Asset assetsRec : accountMap.get(idInst).Assets){
+                Recommendation rec = new Recommendation(Name = assetsRec.Id,Description = 'Product is expired from "'+ assetsRec.Asset_Age_Calculator__c +'" Year. Would you like to create an Event?', 
+                                                        ActionReference = 'Event_Flow',AcceptanceLabel = 'Create Event',Dummy_Id__c = assetsRec.Id);
+                recs.add(rec);
+            }
+        }
+        outputs.add(recs);
+        return outputs;
+    }
+     /*
+     * @author: Urvashi
+     *
+     * @date:     
+     *
+     * @description: Recommendation generator request class for Accounts
+     */
+    global class RecommendationGenerateRequest
+    {
+        @InvocableVariable(label='Account ID')
+        global String accId;
+    }
+}
