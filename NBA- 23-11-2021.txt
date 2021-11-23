@@ -1,0 +1,333 @@
+RecommendationToGenerateEvent-------------> 
+ /*
+ * @author: Urvashi
+ *
+ * @date: 23/11/2021
+ *
+ * @description: Recommendation Generator class for Events on Account record page
+ */
+global class RecommendationToGenerateEvent {
+@InvocableMethod(label='Recommendation Generator to create Event'
+                     description='This function returns recommendations to create Event.')
+	/*
+	 * @author: Urvashi
+	 *
+	 * @date: 23/11/2021
+	 *
+	 * @description: Generating Recommendations for Events whose Asset expiration greater than 7 year old.
+	 *
+	 * @param: inputRequests: list of recommendations for account record page
+	 *
+	 * @return: list of recommendations
+	 */
+	global static List<List<Recommendation>> getRecs(List<RecommendationGenerateRequest> inputRequests)
+	{
+		List<List<Recommendation>> outputs = new List<List<Recommendation>>();
+		Set<Id> AccountIds = new Set<Id>();
+		List<Recommendation_Setting__mdt> rs = RecommendationSettingSelector_CA.newInstance().selectByName(RecommendationUtils_CA.JAPAN_NBA_NAME);
+		for (RecommendationGenerateRequest inputRequest : inputRequests)
+		{
+			AccountIds.add(inputRequest.accId);
+		}
+		List<Account> accs = new List<Account>();
+		accs = AccountsSelector_CA.newInstance().getAccountsWithAssets(AccountIds,rs[0].Region_Filter__c,rs[0].Record_Type_Name__c,rs[0].Account_Status__c,rs[0].Asset_Status__c,rs[0].ProductFamily__c,rs[0].Asset_Age_Calculator__c);
+		outputs = RecommendationUtils_CA.getAccountEventRecommendations(accs);
+		return outputs;
+	}
+   
+	/*
+	 * @author: Urvashi
+	 *
+	 * @date: 23/11/2021
+	 *
+	 * @description:  Recommendation generator request class for Accounts
+	 */
+	global class RecommendationGenerateRequest
+	{
+		@InvocableVariable(label='Account ID')
+		global String accId;
+	}
+}
+*****************************************************
+AccountsSelector_CA----------->
+/**
+* @author : Urvashi Barapatre | APJ Call Automation FOR JAPAN
+* @description Account selector class
+* @date 23-11-2021
+* Copyright (c) $2021 Johnson & Johnson
+*/
+public with sharing class AccountsSelector_CA  extends fflib_SObjectSelector{
+    
+    public static AccountsSelector_CA newInstance()
+    {
+        return (AccountsSelector_CA) Application_CA.Selector.newInstance(Account.SObjectType);
+    }
+    
+    public SObjectType getSObjectType()
+    {
+        return Account.SObjectType;
+    }
+    
+    public List<Schema.SObjectField> getSObjectFieldList()
+    {
+        return new List<Schema.SObjectField>
+        {
+            Account.Region__c,
+                Account.Id,
+                Account.LastActivityDate,
+                Account.LastModifiedDate,
+                Account.Name,
+                Account.Record_Type_Name__c,
+                Account.Status__c
+                };
+                    }
+    /**
+	  * getAccountsWithAssets
+	  * @description Method to get Accounts with Assets
+	  * @param set of AccountIds, endDate, RegionFilter, VisitResultFilter
+	  * @return Returns a list of Accounts
+	  */
+	public List<Account> getAccountsWithAssets(Set<Id> AccountIds,String RegionFilter, String RecordTypeName, String AccStatus, String AssetStatus, String ProductFamily, Decimal Assetage)
+	{
+		fflib_QueryFactory aQF = newQueryFactory().setCondition('Region__c = :RegionFilter AND Id IN : AccountIds AND Record_Type_Name__c =:RecordTypeName AND Status__c =: AccStatus');
+        new AssetsSelector_CA().addQueryFactorySubselect(aQF, 'Assets').setCondition('Asset_Age_Calculator__c =: Assetage AND Acc_Region__c =:RegionFilter AND Status =: AssetStatus AND ProductFamily =:ProductFamily' );
+		return (List<Account>) Database.query(aQF.toSOQL());
+	}
+}
+******************************************************
+AssetsSelector_CA---->
+/**
+* @author : Urvashi Barapatre | APJ Call Automation FOR JAPAN
+* @description Asset selector class
+* @date 23-11-2021
+* Copyright (c) $2021 Johnson & Johnson
+*/
+public with sharing class AssetsSelector_CA extends fflib_SObjectSelector
+{
+    public Schema.SObjectType getSObjectType()
+    {
+        return Asset.SObjectType;
+    }
+    
+    public List<Schema.SObjectField> getSObjectFieldList()
+    {
+        return new List<Schema.SObjectField>
+        {
+            Asset.Id,
+                Asset.Name,
+                Asset.Asset_Age_Calculator__c,
+                Asset.Acc_Region__c,
+                Asset.Status,
+                Asset.ProductFamily,
+                Asset.AccountId
+                
+                };
+                    }
+}
+********************************************************
+EventsSelector_CA--->
+
+/**
+* @author : Urvashi Barapatre | APJ Call Automation FOR JAPAN
+* File Name: EventsSelector_CA 
+* @date 23-11-2021
+* Description: Selector class for Event
+* Copyright (c) 2021 Johnson & Johnson
+*/
+public with sharing class EventsSelector_CA extends fflib_SObjectSelector
+{
+    public SObjectType getSObjectType()
+    {
+        return Event.SObjectType;
+    }
+    
+    public List<Schema.SObjectField> getSObjectFieldList()
+    {
+        return new List<Schema.SObjectField>
+        {
+            Event.Id,
+                Event.Subject,
+                Event.WhatId,
+                Event.CreatedDate,
+                Event.Event_Type__c,
+                Event.Field3__c,
+                Event.region__c,
+                Event.Einstein_NBA_Flag__c
+                };
+                    }
+}
+******************************************************************
+RecommendationSettingSelector_CA---->
+/**
+ * @author : Urvashi Barapatre | APJ Call Automation FOR JAPAN
+ * File Name: RecommendationSettingSelector_CA  
+ * Description: Selector class for Recommendation_Setting__mdt
+ * @date 23-11-2021
+ * Copyright (c) 2021 Johnson & Johnson
+ */
+public with sharing class RecommendationSettingSelector_CA extends fflib_SObjectSelector
+{
+    /**
+     * Create New Instance
+     */
+    public static RecommendationSettingSelector_CA newInstance()
+    {
+        return (RecommendationSettingSelector_CA) Application_CA.Selector.newInstance(Recommendation_Setting__mdt.SObjectType);
+    }
+
+    public Schema.SObjectType getSObjectType()
+    {
+        return Recommendation_Setting__mdt.sObjectType;
+    }
+
+    /**
+     * getSObjectFieldList
+     * @description Holds a list of fields to be returned by all selector methods
+     * @return Returns list of default Recommendation fields
+     */
+    public List<Schema.SObjectField> getSObjectFieldList()
+    {
+        return new List<Schema.SObjectField>
+        {
+                Recommendation_Setting__mdt.Account_Status__c,
+                Recommendation_Setting__mdt.Advance_Preparation__c,
+                Recommendation_Setting__mdt.DeveloperName,
+                Recommendation_Setting__mdt.Asset_Age_Calculator__c,
+                Recommendation_Setting__mdt.Asset_Status__c,
+                Recommendation_Setting__mdt.Einstein_NBA_Flag__c,
+                Recommendation_Setting__mdt.ProductFamily__c,
+                Recommendation_Setting__mdt.Id,
+                Recommendation_Setting__mdt.Record_Type_Name__c,
+                Recommendation_Setting__mdt.Region_Filter__c
+        };
+    }
+
+    /**
+     * selectByComponetName
+     * @description Used to query Recommendation setting custom metadata
+     * @return Returns Recommendation setting custom metadata
+    */
+    public List<Recommendation_Setting__mdt> selectByName(String recommendationSettingName)
+    {
+        return (List<Recommendation_Setting__mdt>)
+                Database.query(
+                        newQueryFactory().
+                                setCondition('DeveloperName = :recommendationSettingName').
+                                toSOQL());
+    }
+
+}
+****************************************************
+Application_CA--->
+/**
+ * @author : Urvashi Barapatre | APJ Call Automation FOR JAPAN
+ * @description Handles selector
+ * @date 23-11-2021
+ * Copyright (c) $2021 Johnson & Johnson
+ */
+public class Application_CA
+{
+	public static final fflib_Application.SelectorFactory selector = new fflib_Application.SelectorFactory(new Map<SObjectType, Type>
+	{
+			Account.SObjectType => AccountsSelector_CA.class,
+			Event.SObjectType => EventsSelector_CA.class,
+			Asset.SObjectType => AssetsSelector_CA.class,
+			Recommendation_Setting__mdt.SObjectType => RecommendationSettingSelector_CA.class
+			//User.SObjectType => UsersSelector_SCE.class
+	});
+}
+******************************************************
+
+RecommendationUtils_CA--->
+/**
+ * @author : Urvashi Barapatre | APJ Call Automation FOR JAPAN
+ * @description: Util class for Recommendation NBA
+ * @date 23-11-2021
+ * Copyright (c) $2021 Johnson & Johnson
+ */
+public class RecommendationUtils_CA
+{
+    public static final String JAPAN_NBA_NAME = System.Label.Recommendation_Setting_Record_Name;
+    
+    /**
+      * @param accounts: List of Accounts
+      * @description  gets recommendations for Event NBA on Account detail Page
+      * @return list of Recommendations list
+      */
+    public static List<List<Recommendation>> getAccountEventRecommendations(List<Account> accounts)
+    {
+        List<List<Recommendation>> allRecs = new List<List<Recommendation>>();
+        List<Recommendation> recs = new List<Recommendation>();
+        Integer age;
+        for (Account currentAccount : accounts)
+        {
+            if (currentAccount != null && (!currentAccount.Assets.isEmpty()) )
+            {
+                String recDesc = System.Label.Asset_Expire_Recommendation_Description;
+                recs = (generateEventRecommendations(currentAccount, recDesc));
+            }
+            allRecs.add(recs);
+        }
+        return allRecs;
+    }
+
+    /**
+      * @param currentAccount: Account, recDesc
+      * @description  generates recommendations for Assets
+      * @return list of Recommendations 
+      */
+    public static List<Recommendation> generateEventRecommendations(Account currentAccount, String recDesc)
+    {
+        List<Recommendation> assRecs = new List<Recommendation>();
+        if (currentAccount != null && (!currentAccount.Assets.isEmpty()))
+                
+       {
+            for (Asset ass : currentAccount.Assets)
+            {
+                String Name = ass.Name;
+                String Description = recDesc;
+                String ActionReference = System.Label.Event_Flow_Action_Reference;
+                String AcceptanceLabel = System.Label.Create_Event_Acceptance_Label;
+                String recId = ass.Id;
+                String eventWhatId = ass.AccountId;
+                Recommendation rec = generateRecommendation(Description, Name, ActionReference, recId, AcceptanceLabel, eventWhatId);
+                assRecs.add(rec);
+            }
+        }
+        return assRecs;
+    }
+    /**
+      * @param recDescription, recName, flowReference, idReference, acceptLabel, eventWhatId
+      * @description generates recommendations on Account detail Page and Home Page
+      * @return Recommendation
+      */
+    public static Recommendation generateRecommendation(String recDescription, String recName, String flowReference, String idReference, String acceptLabel, String eventWhatId)
+    {
+        if (!String.isBlank(EventwhatId))
+        {
+            Recommendation reco = new Recommendation(
+                    Name = recName,
+                    Description = recDescription,
+                    ActionReference = flowReference,
+                    AcceptanceLabel = acceptLabel,
+                    Dummy_Id__c = idReference,
+                    Event_What_ID__c = EventwhatId
+            );
+            return reco;
+        }
+        else
+        {
+            Recommendation reco = new Recommendation(
+                    Name = recName,
+                    Description = recDescription,
+                    ActionReference = flowReference,
+                    AcceptanceLabel = acceptLabel,
+                    Dummy_Id__c = idReference
+            );
+            return reco;
+        }
+    }
+
+    
+}
+****************************************************
