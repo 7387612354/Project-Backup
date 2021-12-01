@@ -1,0 +1,259 @@
+/*
+* Class Name: CalenderClass
+* Created Date : 11/11/2021
+* Description: This class used in Custom_Calendar_CMP,DataTable_Call_Planning,DataTable_Call component.
+* Copyright (c) 2018 Johnson & Johnson
+*/
+
+public class CalenderClass {
+    /*Calender Code Start*/
+    @AuraEnabled
+    public static list<Event> getAllEvents(){
+        list<Event> eventlist =[Select id, EndDateTime,StartDateTime,Subject,WhatID,WhoID,Account.Name from Event where createdById=:Userinfo.getUserId()] ;
+        return eventlist;
+    }
+    @AuraEnabled
+    public static void updateEvent(string eventid,string eventdate){
+        system.debug(eventid);
+        system.debug(eventdate);
+        string eventdatelist = eventdate.replace('T',' ');
+
+        system.debug(eventdatelist);
+        Event e= new event(id = eventid);
+        e.StartDateTime = DateTime.valueof(eventdatelist);
+        update e;
+    }
+    /*Calender Code end*/
+
+
+    /*DataTable code Start*/
+   @AuraEnabled
+    public static List<Call_Plan_Data__c> getCallPlannerRec() {                
+        return [SELECT Account_Name__c,AccountId__c,Call_Schedule_Flag__c,Cataract_Segment__c,Contact_Name__c,Event_Count__c,IOL_sales__c,JNJ_IOL_share__c,Main_Doctor__c,Medicare_Procedure__c,Predicted_Account_fulfillment__c,Predicted_IOL_Sales_Amount__c,Sales_Rank__c,SAP_Account_Number__c,Territory_Manager__c FROM Call_Plan_Data__c WHERE Main_Doctor__c = true ORDER BY Rank__c ASC NULLS FIRST];
+    } 
+
+    /*DataTable code End*/
+
+    /*Picklist Event Type Code Start*/
+    @AuraEnabled 
+    public static Map<String, String> getEventtypeFieldValue(){
+        Map<String, String> options = new Map<String, String>();
+        Schema.DescribeFieldResult fieldResult = event.Event_Type__c.getDescribe();
+        List<Schema.PicklistEntry> pValues = fieldResult.getPicklistValues();
+        for (Schema.PicklistEntry p: pValues) {
+
+            options.put(p.getValue(), p.getLabel());
+        }
+        return options;
+    }
+    /*Picklist Event Type Code END*/
+
+    /*Event Insert Code Start*/
+    @AuraEnabled
+    public static event insertEvt(string callPlanRec,string eventsub, datetime strtdate, datetime enddate,String eventtype) {  
+        Id recordTypeId = Schema.SObjectType.Event.getRecordTypeInfosByDeveloperName().get('JAPN_Cataract').getRecordTypeId();
+        Call_Plan_Data__c rec = (Call_Plan_Data__c)System.JSON.deserialize(callPlanRec, Call_Plan_Data__c.class);
+
+        Event eventRec =  NEw Event();
+        eventRec.WhatId = rec.AccountId__c;
+        eventRec.Subject = eventsub;
+        //eventRec.Subject = 'Call Planning';
+        eventRec.StartDateTime =strtdate;
+      // eventRec.StartDateTime =DateTime.parse('05/22/2012 11:46 AM');
+        eventRec.EndDateTime =enddate;
+        eventRec.Event_Type__c = eventtype;
+        eventRec.region__c ='JAPN';
+        eventRec.RecordtypeId= recordTypeId;
+        insert eventRec;
+
+        if(eventRec.Id !=null){
+            rec.Call_Schedule_Flag__c = true;
+            update rec;
+        }
+        return eventRec;
+    }
+    /*Event Insert Code End*/
+}
+**********************************
+<aura:component controller="CalenderClass" implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,forceCommunity:availableForAllPageTypes,force:lightningQuickAction" access="global" >
+    
+    <ltng:require styles="{!$Resource.FullCalendarJS    + '/fullcalendar-3.0.0/fullcalendar.css'}"
+                  scripts="{!join(',',
+                           $Resource.FullCalendarJS + '/fullcalendar-3.0.0/lib/jquery.min.js',
+                           $Resource.FullCalendarJS  + '/fullcalendar-3.0.0/lib/moment.min.js',
+                           $Resource.FullCalendarJS  + '/fullcalendar-3.0.0/fullcalendar.js'
+                           )}"
+                  afterScriptsLoaded="{!c.afterScriptsLoaded}" />
+    
+    <ltng:require styles="/resource/FullCalendarJS/fullcalendar-3.0.0/fullcalendar.css"/>
+    
+    <aura:attribute name='Objectlist' type='Object[]'/>
+    <aura:attribute name="buttonstate" type="Boolean" default="false"/>
+    <lightning:card>
+        <lightning:buttonStateful labelWhenOff="List View" labelWhenOn="Grid View" state="{!v.buttonstate}" variant="Brand"  onclick="{!c.handleClick }"/>
+        <div id="calendar" class="slds-card">
+        </div>
+        <div id="listcalendar" class="slds-card"/>
+    </lightning:card>
+    
+</aura:component>
+**********************
+({
+    afterScriptsLoaded: function(cmp,evt,helper){
+        
+        helper.fetchCalenderEvents(cmp);
+    },
+    
+    handleClick : function(component, event, helper){ 
+        var buttonstate = component.get("v.buttonstate");
+        component.set("v.buttonstate",!buttonstate);
+        if(!buttonstate){
+            $("#listcalendar").show();
+            $("#calendar").hide();
+            $('#listcalendar').fullCalendar({
+                defaultView: 'listWeek',
+                listDayFormat : true,
+                events : component.get("v.Objectlist")
+            });
+        }
+        else{
+            $("#calendar").show();
+            $("#listcalendar").hide();   
+            helper.fetchCalenderEvents(component);
+        }
+    },
+})
+************************
+({
+    loadDataToCalendar :function(component,data){  
+        //Find Current date for default date
+        var d = new Date();
+        var month = d.getMonth()+1;
+       var day = d.getDate();
+        var currentDate = d.getFullYear() + '/' +
+            (month<10 ? '0' : '') + month + '/' +
+            (day<10 ? '0' : '') + day;
+        
+        var self = this;
+        $('#calendar').fullCalendar({
+            header: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'month,basicWeek,basicDay'
+            },
+            selectable : true,
+            defaultDate: currentDate,
+            editable: true,
+            eventLimit: true,
+            events:data,
+            dragScroll : true,
+            droppable: true,
+            weekNumbers : true,
+            eventDrop: function(event, delta, revertFunc) {
+                
+                alert(event.title + " was dropped on " + event.start.format());
+                
+                if (!confirm("Are you sure about this change?")) {
+                    revertFunc();
+                }
+                else{
+                    var eventid = event.id;
+                    var eventdate = event.start.format();
+                    self.editEvent(component,eventid,eventdate);
+                }
+            },
+            eventClick: function(event, jsEvent, view) {
+                var editRecordEvent = $A.get("e.force:editRecord");
+                editRecordEvent.setParams({
+                    "recordId": event.id
+                });
+                editRecordEvent.fire();
+            },
+            dayClick :function(date, jsEvent, view) {
+                
+                var datelist = date.format().toString().split('-');
+                
+                var datetime = new Date(datelist[0],parseInt(datelist[1])-1,parseInt(datelist[2])+1,0,0,0,0);
+                
+                var createRecordEvent = $A.get("e.force:createRecord");
+                createRecordEvent.setParams({
+                    "entityApiName": "Event",
+                    "defaultFieldValues": {
+                        'StartDateTime' :  datetime
+                    }
+                });
+                createRecordEvent.fire();
+            },
+            eventMouseover : function(event, jsEvent, view) {
+            }
+        });
+    },
+    formatFullCalendarData : function(component,events) {
+        var josnDataArray = [];
+        for(var i = 0;i < events.length;i++){
+            var startdate = $A.localizationService.formatDate(events[i].StartDateTime);
+            var enddate = $A.localizationService.formatDate(events[i].EndDateTime);
+            josnDataArray.push({
+                //'title':events[i].Subject,
+                'title':events[i].Subject  + "\n" + events[i].Account.Name + "\n" + startdate,
+                //'title':events[i].Subject  + "\n" + events[i].Account.Name + "\n" + startdate + "\n" + enddate,
+                //'title':events[i].Subject  + "\n" + events[i].Account.Name + "\n" + events[i].StartDateTime + "\n" + events[i].EndDateTime,
+                'start':startdate,
+                'end':enddate,
+                'id':events[i].Id
+            });
+        }
+        
+        return josnDataArray;
+    },
+    
+    fetchCalenderEvents : function(component) {
+        var action=component.get("c.getAllEvents");
+        
+        action.setCallback(this, function (response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                var data= response.getReturnValue();
+                
+                var josnArr = this.formatFullCalendarData(component,response.getReturnValue());
+                this.loadDataToCalendar(component,josnArr);
+                component.set("v.Objectlist",josnArr);
+                
+            } else if (state === "ERROR") {
+                
+            }
+        });
+        
+        $A.enqueueAction(action);
+    }, 
+    
+    editEvent : function(component,eventid,eventdate){
+        var action=component.get("c.updateEvent");
+        action.setParams({ eventid : eventid ,
+                          eventdate : eventdate});
+        
+        action.setCallback(this, function (response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                
+            } else if (state === "ERROR") {
+                
+            }
+        });
+        $A.enqueueAction(action);
+    }
+})
+*******************************************
+.THIS .fc-time{
+   display : none;
+}
+.THIS .fc-ltr .fc-list-heading-main{
+     display : none;
+}
+.THIS .fc-ltr .fc-list-heading-alt {
+    float: left;
+}
+.THIS .body{
+    display : none;
+}
+********************************
