@@ -1,0 +1,152 @@
+Datatable---------->
+/*
+* @author : Urvashi Barapatre | APJ Call Automation FOR JAPAN
+* Class Name: CA_DatableClass
+* Created Date : 30/11/2021
+* Description: This class used in CA_PositiveDatable,CA_NegativeDatable,DataTable_Call components.
+* Copyright (c) 2021 Johnson & Johnson
+*/
+
+public class CA_DatableClass {
+    /*Positive DataTable code Start*/
+    @AuraEnabled
+    public static List<Call_Plan_Data__c> getCallPlannerRec() {
+        User usr =[ SELECT Id,UPI__c,User_Division__c,User_VCode__c FROM User where Id =:Userinfo.getUserId()]; 
+        return [SELECT User_Division__c,Has_Sales_every_Month__c,Last_Call_Date__c ,Account_Name__c,Priority__c,Doctor_Name__r.Name,AccountId__c,Predicted_Account_fulfillment__c,
+                Account_Potential__c,Potential_Difference__c,Medicare_Procedure__c,Call_Frequency_Monthly__c,Cataract_Segment__c,JNJ_IOL_share__c,Plan_to_use_all_JnJ_Prod__c,
+                Available_Doctor_P2__c,Call_of_This_Month__c,Doctor_Name__c,Doc1_Available_Datetime__c,
+                Doc_2_Available_Datetime__c,Account_Addess__c,Incoming_Call_of_This_Month__c,Target_in_3_month__c,Available_Doctor_P1__c FROM Call_Plan_Data__c 
+                WHERE  Has_Sales_every_Month__c = 'Positive' AND (Trim_Data__c=:usr.User_VCode__c OR User_Division__c=:usr.User_Division__c) ORDER BY Priority__c ASC NULLS FIRST limit 10];
+    } 
+    /*Positive DataTable code End*/
+    /*Negative DataTable code Start*/
+    @AuraEnabled
+    public static List<Call_Plan_Data__c> getCallPlannerNegativeRec() {   
+        User usr =[ SELECT Id,User_Division__c,UPI__c,User_VCode__c FROM User where Id =:Userinfo.getUserId()]; 
+        return [SELECT User_Division__c,Has_Sales_every_Month__c,Last_Call_Date__c,Account_Name__c,Main_Doctor__c,Priority__c,AccountId__c,Predicted_IOL_Sales_Amount__c,IOL_sales__c,
+                Sales_Diff_Negative__c,Medicare_Procedure__c,Call_Frequency_Monthly__c,Cataract_Segment__c,JNJ_IOL_share__c,Plan_to_use_all_JnJ_Prod__c,
+                Call_of_This_Month__c,Available_Doctor_P2__c,Doc1_Available_Datetime__c,
+                Doc_2_Available_Datetime__c,Account_Addess__c,Doctor_Name__c,Incoming_Call_of_This_Month__c,Available_Doctor_P1__c
+                FROM Call_Plan_Data__c WHERE  Has_Sales_every_Month__c = 'Negative' AND (Trim_Data__c=:usr.User_VCode__c OR User_Division__c=:usr.User_Division__c) ORDER BY Priority__c ASC NULLS FIRST limit 10];
+    } 
+    /*Negative DataTable code End*/
+    /*Picklist Event Type Code Start*/
+    @AuraEnabled 
+    public static Map<String, String> getEventtypeFieldValue(){
+        Map<String, String> options = new Map<String, String>();
+        //Schema.DescribeFieldResult fieldResult = event.Event_Type__c.getDescribe();
+        Schema.DescribeFieldResult fieldResult = Call_Plan_Data__c.Event_Type_JP__c.getDescribe();
+        List<Schema.PicklistEntry> pValues = fieldResult.getPicklistValues();
+        for (Schema.PicklistEntry p: pValues) {
+            options.put(p.getValue(), p.getLabel());
+        }
+        return options;
+    }
+    /*Picklist Event Type Code END*/
+    
+    /*Event Insert Code Start*/
+    @AuraEnabled
+    public static event insertEvt(string callPlanRec,string eventsub, datetime strtdate, datetime enddate,String eventtype,String topics) {  
+        
+        Id recordTypeId = Schema.SObjectType.Event.getRecordTypeInfosByDeveloperName().get('JAPN_Cataract').getRecordTypeId();
+        Call_Plan_Data__c rec = (Call_Plan_Data__c)System.JSON.deserialize(callPlanRec, Call_Plan_Data__c.class);
+        Event eventRec =  NEw Event();
+        eventRec.WhatId = rec.AccountId__c;
+        eventRec.WhoId = rec.Doctor_Name__c;
+        eventRec.Subject = eventsub;
+        eventRec.StartDateTime =strtdate;
+        eventRec.EndDateTime =enddate;
+        eventRec.Event_Type__c =eventtype;
+        eventRec.Other_Topics_Covered__c =topics;
+        eventRec.region__c ='JAPN';
+        eventRec.Country__c ='JP';
+        eventRec.RecordtypeId= recordTypeId;
+        insert eventRec;
+        //System.debug('topics--'+topics);
+        return eventRec;
+    }
+    /*Event Insert Code End*/
+    
+    /*Lookup Contact on Event PopUp Start*/
+    @AuraEnabled
+    public static void setObjectToRecentItems(Id recordId) {
+        if (!String.isBlank(recordId)) {
+            Schema.SObjectType sObjectType = recordId.getSobjectType();
+            String queryString = String.format('SELECT Id, Name FROM {0} WHERE Id =: recordId FOR VIEW', new List<Object>{sObjectType});
+            Database.query(queryString);
+        }
+    }
+    /*Lookup Contact on Event PopUp End*/
+    
+    /* OtherTopics */
+    @AuraEnabled
+    public static List <String> getPiklistValues() {
+        List<String> plValues = new List<String>();
+        //Get the object type from object name. Here I've used custom object Book.
+        Schema.SObjectType objType = Schema.getGlobalDescribe().get('Call_Plan_Data__c');
+        //Describe the sObject using its object type.
+        Schema.DescribeSObjectResult objDescribe = objType.getDescribe();
+        //Get the specific field information from field name. Here I've used custom field Genre__c of Book object.
+        Schema.DescribeFieldResult objFieldInfo = objDescribe.fields.getMap().get('Other_Topics_Covered_JP__c').getDescribe();
+        //Get the picklist field values.
+        List<Schema.PicklistEntry> picklistvalues = objFieldInfo.getPicklistValues();
+        //Add the picklist values to list.
+        for(Schema.PicklistEntry plv: picklistvalues) {
+            plValues.add(plv.getValue());
+        }
+        plValues.sort();
+        return plValues;
+    }
+}
+*********************************
+calendar--------------->
+/*
+* Class Name: CalenderClass
+* Created Date : 11/11/2021
+* Description: This class used in Custom_Calendar_CMP component.
+* Copyright (c) 2021 Johnson & Johnson
+*/
+
+public class CalenderClass {
+    /*Calender Code Start*/
+    @AuraEnabled
+    public static list<Event> getAllEvents(){
+        User usr =[ SELECT Id,UPI__c,User_VCode__c,User_Division__c FROM User  where Id=:Userinfo.getUserId()]; 
+        list<Event> eventlist= [Select id, EndDateTime,StartDateTime,Event_Type__c,Subject,WhatID,WhoID,Account.Name from Event where Account.Name!=null AND WhatId!=null AND
+                                AccountId in (SELECT Account__c FROM Territory__c WHERE Territory_ID__c=:usr.User_VCode__c) ];
+        
+        List<Call_Plan_Data__c> ids = new list<Call_Plan_Data__c>();
+        ids= [SELECT AccountId__c FROM Call_Plan_Data__c WHERE User_Division__c=:usr.User_Division__c ];
+        List<Id> accIds=new List<Id>();
+        for (Call_Plan_Data__c cpd:ids){
+            
+            accIds.add(cpd.AccountId__c);
+        }
+        list<Event> eventlist1= [Select id, EndDateTime,StartDateTime,Event_Type__c,Subject,WhatID,WhoID,Account.Name from Event where Account.Name!=null 
+                                 AND WhatId!=null AND AccountId in:accIds];
+        if(eventlist.size() ==0 && eventlist1.size()>0){
+            return eventlist1;
+        }
+        else if(eventlist.size() > 0 && eventlist1.size()>0){
+             return eventlist1;
+        }else if(eventlist.size() > 0 && eventlist1.size() == 0){
+             return eventlist;  
+        }else{
+            return eventlist;  
+        }
+    }
+    @AuraEnabled
+    public static void updateEvent(string eventid,string eventdate){
+        system.debug(eventid);
+        system.debug(eventdate);
+        string eventdatelist = eventdate.replace('T',' ');
+        
+        system.debug(eventdatelist);
+        Event e= new event(id = eventid);
+        e.StartDateTime = DateTime.valueof(eventdatelist);
+        update e;
+    }
+    /*Calender Code end*/
+    
+}
+*************************
