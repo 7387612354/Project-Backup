@@ -1,0 +1,265 @@
+/*
+* Class Name: CalenderClass
+* Created Date : 11/11/2021
+* Description: This class used in Custom_Calendar_CMP component.
+* Copyright (c) 2021 Johnson & Johnson
+*/
+
+public class CalenderClass {
+    /*Calender Code Start*/
+    @AuraEnabled
+    public static list<Event> getAllEvents(){
+        //where Account.Name!=null AND WhatId!=null AND  CreatedDate = LAST_N_DAYS:90 AND --What.Name!=null AND who.Name!=null AND 
+                             
+        User usr =[ SELECT Id,UPI__c,User_VCode__c,User_Division__c FROM User  where Id=:Userinfo.getUserId()]; 
+        list<Event> eventlist= [Select id, EndDateTime,StartDateTime,Event_Type__c,Subject,WhatID,WhoID,What.Name,who.Name from Event where 
+                                AccountId in (SELECT Account__c FROM Territory__c WHERE Territory_ID__c=:usr.User_VCode__c) ];
+        
+        list<Event> eventlist1= [Select id, EndDateTime,StartDateTime,Event_Type__c,Subject,WhatID,WhoID,What.Name,who.Name 
+                                 from Event where OwnerId =:usr.Id];
+       if(eventlist.size() ==0 && eventlist1.size()>0){
+            return eventlist1;
+        }
+        else if(eventlist.size() > 0 && eventlist1.size()>0){
+             return eventlist1;
+        }else if(eventlist.size() > 0 && eventlist1.size() == 0){
+             return eventlist;  
+        }else{
+            return eventlist;  
+        }
+    }
+    @AuraEnabled
+    public static void updateEvent(string eventid,string eventdate){
+        system.debug(eventid);
+        system.debug(eventdate);
+        string eventdatelist = eventdate.replace('T',' ');
+        
+        system.debug(eventdatelist);
+        Event e= new event(id = eventid);
+        e.StartDateTime = DateTime.valueof(eventdatelist);
+        update e;
+    }
+    /*Calender Code end*/
+    
+}
+*********************************
+<aura:component controller="CalenderClass" implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,forceCommunity:availableForAllPageTypes,force:lightningQuickAction" access="global" >
+    
+    <ltng:require styles="{!$Resource.FullCalendarJS    + '/fullcalendar-3.0.0/fullcalendar.css'}"
+                  scripts="{!join(',',
+                           $Resource.FullCalendarJS + '/fullcalendar-3.0.0/lib/jquery.min.js',
+                           $Resource.FullCalendarJS  + '/fullcalendar-3.0.0/lib/moment.min.js',
+                           $Resource.FullCalendarJS  + '/fullcalendar-3.0.0/fullcalendar.js'
+                           )}"
+                  afterScriptsLoaded="{!c.afterScriptsLoaded}" />
+    
+    <ltng:require styles="/resource/FullCalendarJS/fullcalendar-3.0.0/fullcalendar.css"/>
+    
+    <aura:attribute name='Objectlist' type='Object[]'/>
+    <aura:attribute name="buttonstate" type="Boolean" default="false"/>
+    <lightning:card>
+        <lightning:buttonStateful labelWhenOff="List View" labelWhenOn="Grid View" state="{!v.buttonstate}" variant="destructive"  onclick="{!c.handleClick }"/>
+        <div id="calendar" class="slds-card">
+        </div>
+        <div id="listcalendar" class="slds-card"/>
+    </lightning:card>
+    
+</aura:component>
+******************************************
+({
+    afterScriptsLoaded: function(cmp,evt,helper){
+        
+        helper.fetchCalenderEvents(cmp);
+    },
+    
+    handleClick : function(component, event, helper){ 
+        var buttonstate = component.get("v.buttonstate");
+        component.set("v.buttonstate",!buttonstate);
+        if(!buttonstate){
+            $("#listcalendar").show();
+            $("#calendar").hide();
+            $('#listcalendar').fullCalendar({
+                defaultView: 'listWeek',
+                //defaultView:'ListView',
+                listDayFormat : true,
+                events : component.get("v.Objectlist")
+            });
+        }
+        else{
+            $("#calendar").show();
+            $("#listcalendar").hide();   
+            helper.fetchCalenderEvents(component);
+        }
+    },
+})
+*************************
+({
+    loadDataToCalendar :function(component,data){  
+        //Find Current date for default date
+        var d = new Date();
+        var month = d.getMonth()+1;
+        var day = d.getDate();
+        var currentDate = d.getFullYear() + '/' +
+            (month<10 ? '0' : '') + month + '/' +
+            (day<10 ? '0' : '') + day;
+        
+        var self = this;
+        $('#calendar').fullCalendar({
+            header: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'month,basicWeek,basicDay'
+            },
+            selectable : true,
+            defaultDate: currentDate,
+            editable: true,
+            eventLimit: true,
+            events:data,
+            dragScroll : true,
+            droppable: true,
+            weekNumbers : true,
+            eventDrop: function(event, delta, revertFunc) {
+                
+                alert(event.title + " was dropped on " + event.start.format());
+                
+                if (!confirm("Are you sure about this change?")) {
+                    revertFunc();
+                }
+                else{
+                    var eventid = event.id;
+                    var eventdate = event.start.format();
+                    self.editEvent(component,eventid,eventdate);
+                }
+            },
+            eventClick: function(event, jsEvent, view) {
+                var editRecordEvent = $A.get("e.force:editRecord");
+                editRecordEvent.setParams({
+                    "recordId": event.id
+                });
+                editRecordEvent.fire();
+            },
+            dayClick :function(date, jsEvent, view) {
+                
+                var datelist = date.format().toString().split('-');
+                
+                var datetime = new Date(datelist[0],parseInt(datelist[1])-1,parseInt(datelist[2])+1,0,0,0,0);
+                // var datetime = System.today();
+                
+                var createRecordEvent = $A.get("e.force:createRecord");
+                createRecordEvent.setParams({
+                    "entityApiName": "Event",
+                    "defaultFieldValues": {
+                        'StartDateTime' :  datetime
+                    }
+                });
+                createRecordEvent.fire();
+            },
+            eventMouseover : function(event, jsEvent, view) {
+            }
+        });
+    },
+    formatFullCalendarData : function(component,events) {
+        var josnDataArray = [];
+        
+        for(var i = 0;i < events.length;i++){
+            var startdate = $A.localizationService.formatDate(events[i].StartDateTime);
+            var enddate = $A.localizationService.formatDate(events[i].EndDateTime);
+            var startdate1 = $A.localizationService.formatTime(events[i].StartDateTime);
+            var enddate1 = $A.localizationService.formatTime(events[i].EndDateTime);
+             
+           if(events[i].WhatId && events[i].WhoId){
+                josnDataArray.push({
+                'title':events[i].Subject  + "\n" + events[i].What.Name + "\n"+ events[i].Who.Name +"\n" + startdate1 + "-" + enddate1,
+                'start':startdate,
+                'end':enddate,
+                'id':events[i].Id
+            });
+            }else if(!events[i].WhatId && events[i].WhoId){
+                josnDataArray.push({
+                'title':events[i].Subject  + "\n" + "-" + "\n"+ events[i].Who.Name +"\n" + startdate1 + "-" + enddate1,
+                'start':startdate,
+                'end':enddate,
+                'id':events[i].Id
+            });
+            }else if(events[i].WhatId && !events[i].WhoId){
+                josnDataArray.push({
+                'title':events[i].Subject  + "\n" + events[i].What.Name + "\n"+ "-" +"\n" + startdate1 + "-" + enddate1,
+                'start':startdate,
+                'end':enddate,
+                'id':events[i].Id
+            });
+            }else{
+                josnDataArray.push({
+                'title':events[i].Subject  + "\n" + "-" + "\n"+ "-" +"\n" + startdate1 + "-" + enddate1,
+                'start':startdate,
+                'end':enddate,
+                'id':events[i].Id
+            });
+            }
+        }
+        
+        return josnDataArray;
+    },
+    
+    fetchCalenderEvents : function(component) {
+        var action=component.get("c.getAllEvents");
+        
+        action.setCallback(this, function (response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                var data= response.getReturnValue();
+                
+                var josnArr = this.formatFullCalendarData(component,response.getReturnValue());
+                this.loadDataToCalendar(component,josnArr);
+                component.set("v.Objectlist",josnArr);
+                
+            } else if (state === "ERROR") {
+                
+            }
+        });
+        
+        $A.enqueueAction(action);
+    }, 
+    
+    editEvent : function(component,eventid,eventdate){
+        var action=component.get("c.updateEvent");
+        action.setParams({ eventid : eventid ,
+                          eventdate : eventdate});
+        
+        action.setCallback(this, function (response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                
+            } else if (state === "ERROR") {
+                
+            }
+        });
+        $A.enqueueAction(action);
+    }
+})
+************************************************
+.THIS .fc-time{
+   display : none;
+}
+.THIS .fc-ltr .fc-list-heading-main{
+     display : none;
+}
+.THIS .fc-ltr .fc-list-heading-alt {
+    float: left;
+}
+.THIS .body{
+    display : none;
+}
+
+.THIS .fc-list-item-time.fc-widget-content{
+    display : none;
+}
+.THIS .fc-content{
+    background-color: #B71C1C;
+    /*background-color: #808080;*/
+}
+.THIS .calendarTitle{
+    font-size: 20px;
+    color: #B71C1C;
+}
+***************************
