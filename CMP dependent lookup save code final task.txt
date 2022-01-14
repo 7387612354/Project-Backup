@@ -1,0 +1,1582 @@
+Datatable APex------->
+
+/*
+* @author : Urvashi Barapatre | APJ Call Automation FOR JAPAN
+* Class Name: CA_DatableClass
+* Created Date : 30/11/2021
+* Description: This class used in CA_PositiveDatable,CA_NegativeDatable components.
+* Copyright (c) 2021 Johnson & Johnson
+*/
+
+public class CA_DatableClass {
+    /*Positive DataTable code Start*/
+    @AuraEnabled
+    public static List<Call_Plan_Data__c> getCallPlannerRec() {
+        User usr =[ SELECT Id,UPI__c,User_Division__c,User_VCode__c FROM User where Id =:Userinfo.getUserId()]; 
+        return [SELECT User_Division__c,Has_Sales_every_Month__c,Last_Call_Date__c ,Last_Call_Date_Formula__c,Account_Name__c,
+                Priority__c,Doctor_Name__r.Name,AccountId__c,Predicted_Account_fulfillment__c,Account_Potential__c,
+                Potential_Difference__c,Medicare_Procedure__c,Call_Frequency_Monthly__c,Cataract_Segment__c,JNJ_IOL_share__c,
+                Plan_to_use_all_JnJ_Prod__c, Available_Doctor_P2__c,Call_of_This_Month__c,Doctor_Name__c,Doc1_Available_Datetime__c,
+                Doc_2_Available_Datetime__c,Account_Addess__c,Incoming_Call_of_This_Month__c,Target_in_3_month__c,
+                Available_Doctor_P1__c,TM_Manager1__c,TM_Manager2__c,TM_Manager3__c,TM_Manager4__c,Call_Target_Meet__c,Target_month_Sales_plan_unit__c 
+                FROM Call_Plan_Data__c WHERE  Has_Sales_every_Month__c = 'Positive' AND
+                (Trim_Data__c=:usr.User_VCode__c OR User_Division__c=:usr.User_Division__c OR TM_Manager1__c =:usr.User_VCode__c
+                 OR TM_Manager2__c =:usr.User_VCode__c OR TM_Manager3__c =:usr.User_VCode__c OR TM_Manager4__c =:usr.User_VCode__c)
+                ORDER BY Call_Target_Meet__c DESC,Priority__c ASC NULLS LAST ];
+        
+    } 
+    /*Positive DataTable code End*/
+    /*Negative DataTable code Start*/
+    @AuraEnabled
+    public static List<Call_Plan_Data__c> getCallPlannerNegativeRec() {   
+        User usr =[ SELECT Id,User_Division__c,UPI__c,User_VCode__c FROM User where Id =:Userinfo.getUserId()]; 
+        return [SELECT User_Division__c,Has_Sales_every_Month__c,Last_Call_Date__c,Last_Call_Date_Formula__c,Account_Name__c,
+                Main_Doctor__c,Priority__c,AccountId__c,Predicted_IOL_Sales_Amount__c,IOL_sales__c,Sales_Diff_Negative__c,
+                Medicare_Procedure__c,Call_Frequency_Monthly__c,Cataract_Segment__c,JNJ_IOL_share__c,Plan_to_use_all_JnJ_Prod__c,
+                Call_of_This_Month__c,Available_Doctor_P2__c,Doc1_Available_Datetime__c,Doc_2_Available_Datetime__c,
+                Account_Addess__c,Doctor_Name__c,Incoming_Call_of_This_Month__c,Available_Doctor_P1__c,TM_Manager1__c,
+                TM_Manager2__c,TM_Manager3__c,TM_Manager4__c,Call_Target_Meet__c FROM Call_Plan_Data__c WHERE  
+                Has_Sales_every_Month__c = 'Negative' AND 
+                (Trim_Data__c=:usr.User_VCode__c OR User_Division__c=:usr.User_Division__c OR TM_Manager1__c =:usr.User_VCode__c
+                 OR TM_Manager2__c =:usr.User_VCode__c OR TM_Manager3__c =:usr.User_VCode__c OR TM_Manager4__c =:usr.User_VCode__c) 
+                ORDER BY Call_Target_Meet__c DESC,Priority__c ASC  NULLS LAST ];
+    } 
+    /*Negative DataTable code End*/
+    /*Picklist Event Type Code Start*/
+    @AuraEnabled 
+    public static Map<String, String> getEventtypeFieldValue(){
+        Map<String, String> options = new Map<String, String>();
+        //Schema.DescribeFieldResult fieldResult = event.Event_Type__c.getDescribe();
+        Schema.DescribeFieldResult fieldResult = Call_Plan_Data__c.Event_Type_JP__c.getDescribe();
+        List<Schema.PicklistEntry> pValues = fieldResult.getPicklistValues();
+        for (Schema.PicklistEntry p: pValues) {
+            options.put(p.getValue(), p.getLabel());
+        }
+        return options;
+    }
+    /*Picklist Event Type Code END*/
+    
+    /*Event Insert Code Start*/
+    @AuraEnabled
+    public static event insertEvt(string callPlanRec,string eventsub, datetime strtdate, datetime enddate,String eventtype,String topics) {  
+        Id recordTypeId = Schema.SObjectType.Event.getRecordTypeInfosByDeveloperName().get('JAPN_Cataract').getRecordTypeId();
+        Call_Plan_Data__c rec = (Call_Plan_Data__c)System.JSON.deserialize(callPlanRec, Call_Plan_Data__c.class);
+        Event eventRec =  NEw Event();
+        eventRec.WhatId = rec.AccountId__c;
+        eventRec.WhoId = rec.Doctor_Name__c;
+        //eventRec.WhoId = con.Id;
+        eventRec.Subject = eventsub;
+        eventRec.StartDateTime =strtdate;
+        eventRec.EndDateTime =enddate;
+        eventRec.Event_Type__c =eventtype;
+        eventRec.Other_Topics_Covered__c =topics;
+        eventRec.region__c ='JPAN';
+        eventRec.Country__c ='JP';
+        eventRec.RecordtypeId= recordTypeId;
+        insert eventRec;
+        if(eventRec.Id != null){
+            eventRec.Call_Planning_Flag__c =true;
+            update eventRec;
+        }
+        return eventRec;
+    }
+    /*Event Insert Code End*/
+    
+    /*Lookup Contact on Event PopUp Start*/
+    @AuraEnabled
+    public static void setObjectToRecentItems(Id recordId, string accountId) {
+        if (!String.isBlank(recordId)) {
+            Schema.SObjectType sObjectType = recordId.getSobjectType();
+            String queryString = String.format('SELECT Id, Name FROM {0} WHERE Id =: recordId and accountId =: accountId FOR VIEW', new List<Object>{sObjectType});
+            Database.query(queryString);
+        }
+    }
+    /*Lookup Contact on Event PopUp End*/
+    
+    /* OtherTopics */
+    @AuraEnabled
+    public static List <String> getPiklistValues() {
+        List<String> plValues = new List<String>();
+        //Get the object type from object name. Here I've used custom object Book.
+        Schema.SObjectType objType = Schema.getGlobalDescribe().get('Call_Plan_Data__c');
+        //Describe the sObject using its object type.
+        Schema.DescribeSObjectResult objDescribe = objType.getDescribe();
+        //Get the specific field information from field name. Here I've used custom field Genre__c of Book object.
+        Schema.DescribeFieldResult objFieldInfo = objDescribe.fields.getMap().get('Other_Topics_Covered_JP__c').getDescribe();
+        //Get the picklist field values.
+        List<Schema.PicklistEntry> picklistvalues = objFieldInfo.getPicklistValues();
+        //Add the picklist values to list.
+        for(Schema.PicklistEntry plv: picklistvalues) {
+            plValues.add(plv.getValue());
+        }
+        plValues.sort();
+        return plValues;
+    }
+}
+*******************************
+Positive--------------->
+
+<aura:component controller="CA_DatableClass" implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,lightning:availableForFlowScreens" access="global">
+    <aura:attribute name="callPlannerList" type="object"/>
+    <aura:attribute name="mycolumns" type="List"/>
+    <aura:attribute name="sortedBy" type="boolean" default="Schedule_Flag_Disable__c"/>
+    <aura:attribute name="sortedDirection" type="String" default="asc"/>
+    <aura:attribute name="openModal" type="boolean" default="false"/>
+    <aura:attribute name="selectesRec" type="Call_Plan_Data__c"/>
+     <aura:attribute name="selectesRec1" type="Contact"/>
+    <aura:attribute name="evtSubject" type="String" />
+    <aura:attribute name="ConId" type="String" default=""/>
+    <aura:attribute name="objectAPIName" type="string" default=""/>
+    <aura:attribute name="evtStart" type="DateTime"/>
+    <aura:attribute name="evtend" type="DateTime"/>
+    <aura:attribute name="evtType" type="String"/>
+    <aura:attribute name="eventRec" type="Event"/>
+    <aura:attribute name="fieldMap" type="Map"/>
+    <aura:attribute name="availDTP1Val" type="string"/>
+    <aura:attribute name="availDTP2Val" type="string"/>
+    <aura:handler name="init" value="{!this}" action="{!c.doInit}"/>
+    
+    <!--Declare Other topics Attributes-->
+    <aura:attribute name="GenreList" type="List" default="[]" description="Genre Picklist Values"/>
+    <aura:attribute name="selectedGenreList" type="List" default="[]" description="Selected Genre Picklist Values"/>
+    
+        
+    <aura:attribute name="selectedLookUpRecord" type="sObject" default="{}"/>
+    <aura:attribute name="selectedAccountContacts" type="sObject" default="{}"/>
+     <aura:attribute name="dateValidationError" type="boolean" />
+    <aura:attribute name="dateValidationError1" type="boolean" />
+    
+    <!-- Attributes Lookup -->
+    <aura:attribute name="contactId" type="Id" default=""/>
+    <!-- <aura:handler name="lookupEvent" event="c:componentEvent" action="{!c.handleComponentEvent}"/>-->
+   <aura:handler name="oSelectedRecordEvent" event="c:TestCA_Event" action="{!c.handleComponentEvent}"/>
+
+    
+    
+    <!--Datatable Component start-->
+    <div class="slds-card">
+        <!--Header Start-->
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                <div class="slds-media__figure">
+                    <lightning:Icon iconName="standard:call"  size="small" class="slds-icon slds-input__icon slds-input__icon_right " />
+                </div>
+                <div class="slds-media__body">
+                    <h2>
+                        <a href="javascript:void(0);" class="slds-card__header-link slds-truncate" title="Account List">
+                            <span class="slds-text-heading_small">Call Planning for Positive Account</span>
+                        </a>
+                    </h2>
+                </div>
+            </header>           
+        </div>
+        <!--Header end-->
+        <!--Datatable code Start-->
+        <lightning:card >
+            <lightning:datatable data="{!v.callPlannerList}" columns="{!v.mycolumns}" 
+                                 keyField="id" hideCheckboxColumn="true"
+                                 onsort="{!c.updateColumnSorting}"
+                                 sortedBy="{!v.sortedBy}" sortedDirection="{!v.sortedDirection}"
+                                 onrowaction="{!c.handleRowAction }" />
+        </lightning:card>
+        <!--Datatable code end-->
+    </div>
+    <!--Datatable Component end-->
+    <!-- Start Modal Code-->
+    <aura:if isTrue="{!v.openModal}">
+        <div class="slds-m-around_xx-large">
+            <!--Use aura:if tag to display/hide popup based on isModalOpen value-->                         
+            <!-- Modal/Popup Box starts here-->
+            <section role="dialog" tabindex="-1" aria-labelledby="modal-heading-01" aria-modal="true" aria-describedby="modal-content-id-1" class="slds-modal slds-fade-in-open slds-modal_small">
+                <div class="slds-modal__container">
+                    <div class="slds-scrollable_y"  >
+                        <!--loading spinner start-->
+                        <div class="slds-is-relative">
+                            <aura:if isTrue="{!v.spinner}">
+                                <div aura:id="spinnerId" class="slds-spinner_container">
+                                    <div class="slds-spinner--brand  slds-spinner slds-spinner--medium slds-is-relative" role="alert">
+                                        <span class="slds-assistive-text">Loading</span>
+                                        <div class="slds-spinner__dot-a"></div>
+                                        <div class="slds-spinner__dot-b"></div>
+                                    </div>
+                                </div>
+                            </aura:if>
+                            
+                            <!--Loading spinner end--> 
+                            
+                            <!-- Code -->
+                            <lightning:card>
+                                <div class="slds-p-around_small">
+                                    <header class="slds-modal__header">
+                                        <b><h2 id="modal-heading-01" class="color">New Event</h2></b>
+                                    </header>
+                                    <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                        <div class="slds-col slds-size_6-of-12">
+                                            <span>
+                                                <!--Subject-->
+                                                <lightning:input aura:id="fieldId" name="evtSubject" label="Subject"  value="{!v.evtSubject}" fieldLabel="Subject"/>
+                                            </span>
+                                        </div>
+                                        <div class="slds-col slds-size_6-of-12">
+                                            <span>
+                                                <!-- Picklist Event type-->
+                                                <div class="form-group">
+                                                    <lightning:select aura:id="validate" value="{!v.evtType}"  onchange="{!c.handleOnChange}" name="industryPicklist" 
+                                                                      label="Event Type" messageWhenValueMissing="Event Type is Mandatory" required="true">
+                                                        <option value="">--None--</option>
+                                                        <aura:iteration items="{!v.fieldMap}" var="i" indexVar="key">
+                                                            <option text="{!i.value}" value="{!i.key}" selected="{!i.key==v.evtType}" />
+                                                        </aura:iteration>
+                                                    </lightning:select>
+                                                </div>
+                                                <!-- Picklist Event type-->
+                                            </span>
+                                        </div>
+                                    </div>
+                                   <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <!--Start Datetime-->
+                                            <lightning:input aura:id="validate" type="Datetime" name="evtStart" label="Start Date" value="{!v.evtStart}" 
+                                                             messageWhenValueMissing="Start Date is Mandatory" required="true"  onchange="{!c.StartdateUpdate}" 
+                                                             class="{! v.dateValidationError ? 'slds-has-error' : ''}"/>
+                                            <aura:if isTrue="{!v.dateValidationError}">
+                                                <div class="slds-text-color_error slds-p-left_x-small">
+                                                    Start Date must be in present or in future date.
+                                                </div>
+                                            </aura:if>  
+                                        </span>
+                                    </div>
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <lightning:input aura:id="validate" type="Datetime" name="evtEnd" label="End Date" value="{!v.evtend}" 
+                                                             messageWhenValueMissing="End Date is Mandatory" required="true" onchange="{!c.EnddateUpdate}" 
+                                                             class="{! v.dateValidationError1 ? 'slds-has-error' : ''}"/>
+                                            <aura:if isTrue="{!v.dateValidationError1}">
+                                                <div class="slds-text-color_error slds-p-left_x-small">
+                                                    End Date should be greater than start date.
+                                                </div>
+                                            </aura:if>  
+                                        </span>
+                                    </div>
+                                </div>
+                                    <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                        <div class="slds-col slds-size_6-of-12">
+                                            <span>
+                                                <div class="slds-form-element__label">Account Name</div>
+                                                <div class="slds-box slds-box_xx-small" style="{!v.selectesRec.Account_Name__c}">
+                                                    <aura:if isTrue="{!v.selectesRec.Account_Name__c}">
+                                                        <lightning:icon iconName="standard:account" size="small"></lightning:icon> &nbsp;&nbsp;
+                                                        {!v.selectesRec.Account_Name__c}
+                                                    </aura:if>
+                                                </div>
+                                            </span>
+                                        </div>
+                                        <div class="slds-col slds-size_6-of-12">
+                                            <!--Lookup Contact-->
+                                            <span>
+                                             <!--  <c:CA_ContactLookup name="accountLookup"
+                                                                    fieldLabel="Contact Name"
+                                                                    childObjectApiName="Call_Plan_Data__c"
+                                                                    targetFieldApiName="Doctor_Name__c"
+                                                                    value="{!v.contactId}"
+                                                                    accountDetail="{!v.selectesRec.AccountId__c}"
+                                                                    addToRecent="true"
+                                                                    />-->
+                                            </span>
+                                      <!-- <c:CA_ParentComponent 
+                                                               objectAPIName="account" 
+                                                               IconName="standard:account" 
+                                                               ConId="{!v.ConId}"
+                                                               selectedRecord="{!v.selectedLookUpRecord}"
+                                                               label="Account Name" />-->
+                                            
+                                            <c:CA_ParentComponent 
+                                                                  objectAPIName="Contact" 
+                                                                  IconName="standard:contact"
+                                                                  ConId="{!v.ConId}"
+                                                                  accountDetail="{!v.selectesRec.AccountId__c}"
+                                                                  selectedRecord="{!v.selectedLookUpRecord}"
+                                                                  label="Contact Name"
+                                                                  />
+                                        </div>
+                                        <!--Lookup Contact-->
+                                    </div>
+                                    <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                        <div class="slds-col slds-size_6-of-12">
+                                            <span>
+                                                <lightning:input aura:id="fieldId" label='Dr1' value="{!v.selectesRec.Available_Doctor_P1__c}"  />
+                                            </span>
+                                        </div>
+                                        <div class="slds-col slds-size_6-of-12">
+                                            <span>
+                                                <lightning:input aura:id="fieldId" label='Dr2' value="{!v.selectesRec.Available_Doctor_P2__c}"  />
+                                            </span>
+                                        </div>
+                                    </div>    
+                                    <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                        <div class="slds-col slds-size_6-of-12">
+                                            <span class='Span'>
+                                                <div class="slds-form-element__label">Available Datetime1</div>
+                                                <div class="slds-box slds-box_xx-small" style="{!v.availDTP1Val}"  name="datetime1">
+                                                    <lightning:formattedRichText value="{!v.availDTP1Val}"/>
+                                                    
+                                                </div>
+                                            </span>
+                                        </div>
+                                        <div class="slds-col slds-size_6-of-12">
+                                            <span>
+                                                <div class="slds-form-element__label">Available Datetime2</div>
+                                                <div class="slds-box slds-box_xx-small" style="{!v.availDTP2Val}">
+                                                    <lightning:formattedRichText value="{!v.availDTP2Val}" label="Available Datetime2"/>
+                                                    
+                                                </div>
+                                            </span>
+                                        </div>
+                                    </div> 
+                                    <lightning:dualListbox aura:id="selectGenre"
+                                                           name="Genre"
+                                                           label="Other Topics Covered"
+                                                           options="{!v.GenreList }"
+                                                           value="{!v.selectedGenreList}"
+                                                           onchange="{!c.handleGenreChange}"/>
+                                    
+                                    <footer class="slds-modal__footer">
+                                        <lightning:button iconName="utility:undo"
+                                                          iconPosition="right"
+                                                          variant="destructive-text" 
+                                                          label="Cancel"
+                                                          title="Cancel"
+                                                          onclick="{! c.closeModal }"/>
+                                        
+                                        <lightning:button iconName="utility:send"
+                                                          variant="destructive" 
+                                                          label="Done"
+                                                          title="Done"
+                                                          onclick="{!c.saveRecord }"/>
+                                    </footer>
+                                </div>
+                            </lightning:card>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <div class="slds-backdrop slds-backdrop_open"></div>
+        </div>
+    </aura:if>
+    
+    <!--End Modal code-->
+    <!--Markup ends-->
+</aura:component>
+**************************************************
+({
+    saveRecord: function (cmp, event, helper) {
+         //Custom validation
+       var eventsfields = cmp.find("validate");
+        var blank =0;
+        if(eventsfields.length !=undefined ){
+            var allValid = eventsfields.reduce(function (validSoFar,inputCmp) {
+                inputCmp.showHelpMessageIfInvalid();
+                return validSoFar && inputCmp.get('v.validity').valid;
+            }, true);
+            if(!allValid){
+                blank++;
+            }
+        }else{
+            var allValid=eventsfields;
+            if(!allValid.get('v.validity').valid){
+                blank++;
+           }
+        }
+        /*validation 2*/
+      /* var eventsfields1 = cmp.get('v.ConId');
+       // alert(eventsfields1);
+        if(eventsfields1 == "" || eventsfields1 === undefined){
+            alert('Contact Name is Mandatory');
+            return;
+        }
+        
+        var eventsfields1 = cmp.get("v.ConId");*/
+        if(blank == 0 ){
+        var action = cmp.get("c.insertEvt");
+                //Multislect picklist ; split
+        var test =cmp.get("v.selectedGenreList").join('; ');
+        action.setParams({
+            callPlanRec : JSON.stringify(cmp.get("v.selectesRec")),
+            //con :cmp.get("v.selectesRec"),
+            eventsub : cmp.get("v.evtSubject"),
+            strtdate : cmp.get("v.evtStart"),
+            enddate : cmp.get("v.evtend"),
+            eventtype : cmp.get("v.evtType"),
+            topics : test,
+        });
+        
+        action.setCallback(this,function(response){
+            var state = response.getState();
+            if(state === "SUCCESS"){
+                var toastEvent = $A.get("e.force:showToast");
+                toastEvent.setParams({
+                    title : 'Success',
+                    message: 'Event record has been created successfully.',
+                    duration:' 5000',
+                    key: 'info_alt',
+                    type: 'success',
+                    mode: 'pester'
+                });
+                $A.get('e.force:refreshView').fire(); 
+                toastEvent.fire();
+            }
+            else if(state === "ERROR"){
+                var errors = action.getError();
+                if (errors) {
+                    if (errors[0] && errors[0].message) {
+                        alert(errors[0].message);
+                       // alert('Fail');
+                    }
+                }
+            }
+        });       
+        $A.enqueueAction(action);
+        }
+    },
+    
+    updateColumnSorting: function (cmp, event, helper) {
+        var fieldName = event.getParam('fieldName');
+        var sortDirection = event.getParam('sortDirection');
+        cmp.set("v.sortedBy", fieldName);
+        cmp.set("v.sortedDirection", sortDirection);
+        helper.sortData(cmp, fieldName, sortDirection);
+    },
+    
+    //Contact lookup mapped start
+   /* handleComponentEvent : function(cmp, event, helper) {
+       cmp.set("v.contactId", event.getParam("recordId"));
+       //alert('Conatct Id -->'+ cmp.get('v.contactId'));
+        var addNewVal = cmp.get('v.selectesRec');
+        addNewVal['Doctor_Name__c'] = event.getParam("recordId");  
+        cmp.set('v.selectesRec',addNewVal);
+     
+    },*/
+  /*handleComponentEvent : function(cmp, event, helper) {
+      cmp.set("v.ConId", event.getParam("recordByEvent"));
+      alert('Conatct Id -->'+ cmp.get('v.ConId'));
+        var addNewVal = cmp.get('v.selectesRec');
+        addNewVal['Doctor_Name__c'] = event.getParam("recordByEvent");  
+        cmp.set('v.selectesRec',addNewVal);
+    },*/
+    handleComponentEvent : function(cmp, event, helper) {
+      cmp.set("v.ConId", event.getParam("recordByEventRec"));
+      //alert('Conatct Id -->'+ cmp.get('v.ConId'));
+      //alert(event.getParam("recordByEventRec"));
+      /* var eventsfields1 = cmp.get('v.ConId');
+        if(eventsfields1 === undefined || eventsfields1 == "" ||eventsfields1 == null){
+            alert('Contact Name is Mandatory');
+            return;
+        }*/
+        var addNewVal = cmp.get('v.selectesRec');
+        addNewVal['Doctor_Name__c'] = event.getParam("recordByEventRec").Id;  
+        cmp.set('v.selectesRec',addNewVal);
+    },
+    
+    //Contact lookup mapped end
+    handleRowAction :function(cmp,event,helper){
+        //action gives which action performed
+        var action = event.getParam('action');
+        //row gives complete row information
+        var row = event.getParam('row');
+        cmp.set('v.selectesRec',row);
+        console.log('*****row:'+JSON.stringify(row));
+        console.log(JSON.stringify(action));
+        
+        console.log('You have selected View Action for '+row.Name+'(id='+row.Id+')');
+        cmp.set("v.openModal",true);
+        /*Split Code*/
+        if(row.Doc1_Available_Datetime__c!=null){
+            var splitVal1 = row.Doc1_Available_Datetime__c.replaceAll(" ", "<br/>");
+            var  splitVal01 = splitVal1.replace(/(<br\s*\/?>){2,}/gi, '<br>');
+            cmp.set("v.availDTP1Val",splitVal01);                    
+        }
+        /*Split Code*/
+        if(row.Doc_2_Available_Datetime__c!=null){
+            var splitVal2 = row.Doc_2_Available_Datetime__c.replaceAll(" ","<br/>");
+            var  splitVal01 = splitVal1.replace(/(<br\s*\/?>){2,}/gi, '<br>');
+            cmp.set("v.availDTP2Val",splitVal01);            
+        }
+        
+    },
+    
+    closeModal :function(cmp,event,helper){
+        cmp.set("v.openModal",false);
+    },
+    
+    doInit : function(component, event, helper) {
+        component.set('v.accName','selectesRec.AccountId__c');
+        helper.getPicklistValues(component, event);
+        helper.getTopicsValues(component, event);
+        component.set('v.mycolumns', [
+            {label:'Action',type:  'button',typeAttributes:
+             {iconName: 'utility:view',label: 'Schedule',name: 'viewRecord', disabled :false,value: 'viewBtn',variant:{ fieldName: 'buttonColor'}},"initialWidth": 150
+            },
+            {label: 'Priority', fieldName: 'Priority__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Account Name', fieldName: 'linkName', type: 'url', 
+             typeAttributes: {label: { fieldName: 'Account_Name__c' }, target: '_blank'},"initialWidth": 150},
+            {label: 'Last Call Date', fieldName: 'Last_Call_Date_Formula__c', type: 'text', sortable: true,"initialWidth": 150},
+            {label: 'Completed Call of This Month', fieldName: 'Call_of_This_Month__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Incoming Call of This Month', fieldName: 'Incoming_Call_of_This_Month__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Call Frequency', fieldName: 'Call_Frequency_Monthly__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Target in 3 month', fieldName: 'Target_in_3_month__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Segment', fieldName: 'Cataract_Segment__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Procedures', fieldName: 'Medicare_Procedure__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Predicted Potential(Monthly)', fieldName: 'Predicted_Account_fulfillment__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Sales In Unit (Monthly)', fieldName: 'Account_Potential__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Target month Sales plan unit', fieldName: 'Target_month_Sales_plan_unit__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'JnJ Share', fieldName: 'JNJ_IOL_share__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Plan to use all JnJ Prod', fieldName: 'Plan_to_use_all_JnJ_Prod__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Dr1', fieldName: 'Available_Doctor_P1__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Available Datetime1', fieldName: 'Doc1_Available_Datetime__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Dr2', fieldName: 'Available_Doctor_P2__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Available Datetime2', fieldName: 'Doc_2_Available_Datetime__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Address', fieldName: 'Account_Addess__c', type: 'text',sortable: true,"initialWidth": 150},
+            
+        ]);
+            helper.fetchPosAccounts( component );  
+            },
+            
+            //handle Event type Picklist Selection
+            handleOnChange : function(component, event, helper) {
+            var EventType = component.get("v.evtType");
+            // alert(EventType);
+            },
+            
+            //Topics code
+            handleGenreChange: function (component, event, helper) {
+            //Get the Selected values   
+            var selectedValues = component.get("v.selectedGenreList");
+            //Update the Selected Values  
+            component.set("v.selectedGenreList", selectedValues);
+            },
+            
+             /*StartdateUpdate validation*/
+            /*call dateUpdate function on onchange event on date field*/ 
+            StartdateUpdate : function(component, event, helper) {
+            
+            var today = new Date();        
+            var dd = today.getDate();
+            var mm = today.getMonth() + 1; //January is 0!
+            var yyyy = today.getFullYear();
+            // if date is less then 10, then append 0 before date   
+            if(dd < 10){
+            dd = '0' + dd;
+            } 
+            // if month is less then 10, then append 0 before date    
+            if(mm < 10){
+            mm = '0' + mm;
+            }
+            
+            var todayFormattedDate = yyyy+'-'+mm+'-'+dd;
+            if(component.get("v.evtStart") != '' && component.get("v.evtStart") < todayFormattedDate){
+            component.set("v.dateValidationError" , true);
+            }else{
+            component.set("v.dateValidationError" , false);
+            }
+            },
+            
+            /*EnddateUpdate validation*/
+            EnddateUpdate: function(component, event, helper) {
+            
+            var today = new Date();        
+            var dd = today.getDate();
+            var mm = today.getMonth() + 1; //January is 0!
+            var yyyy = today.getFullYear();
+            // if date is less then 10, then append 0 before date   
+            if(dd < 10){
+            dd = '0' + dd;
+            } 
+            // if month is less then 10, then append 0 before date    
+            if(mm < 10){
+            mm = '0' + mm;
+            }
+            
+            var todayFormattedDate = yyyy+'-'+mm+'-'+dd;
+            if((component.get("v.evtend") != '' && component.get("v.evtend") < todayFormattedDate) || component.get("v.evtend") <= component.get("v.evtStart")){
+            component.set("v.dateValidationError1" , true);
+            }else{
+            component.set("v.dateValidationError1" , false);
+            }
+            
+            },
+            
+})
+************************************
+({
+    sortData: function (cmp, fieldName, sortDirection) {
+        var data = cmp.get("v.callPlannerList");
+        var reverse = sortDirection !== 'asc';
+        data.sort(this.sortBy(fieldName, reverse))
+        cmp.set("v.callPlannerList", data);
+    }, 
+    
+    getPicklistValues: function(component, event) {
+        var action = component.get("c.getEventtypeFieldValue");
+        //var action = component.get("c.getPiklistValues");
+        action.setCallback(this, function(response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                var result = response.getReturnValue();
+                var fieldMap = [];
+                for(var key in result){
+                    fieldMap.push({key: key, value: result[key]});
+                }
+                component.set("v.fieldMap", fieldMap);
+            }
+        });
+        $A.enqueueAction(action);
+    },
+    
+    sortBy: function (field, reverse, primer) {
+        var key = primer ? function(x) {return primer(x[field])} : function(x) {return x[field]};
+        //checks if the two rows should switch places
+        reverse = !reverse ? 1 : -1;
+        return function (a, b) {
+            return a = key(a), b = key(b), reverse * ((a > b) - (b > a));
+        }
+    },
+    
+    fetchPosAccounts : function( component ) {
+        var action = component.get("c.getCallPlannerRec");
+        action.setParams({
+        });
+        action.setCallback(this, function(response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                var records =response.getReturnValue();
+                component.set("v.callPlannerList", response.getReturnValue());
+                records.forEach(function(record){
+                    record['linkName'] = '/lightning/r/Account/' +record['AccountId__c'] +'/view';
+                });
+                 for ( var i = 0; i < records.length; i++ ) {  
+                 if (records[i].Call_Target_Meet__c == 1) {
+                        records[i].buttonColor = 'destructive';  
+                    }
+                    else  
+                        records[i].buttonColor = 'destructive-text'; 
+                }  
+                component.set("v.callPlannerList", records);
+            }
+        });
+        $A.enqueueAction(action);
+    },
+    
+    //Topics code
+    getTopicsValues: function(component, event, helper) {
+        var action = component.get("c.getPiklistValues");
+        action.setCallback(this, function(response) {
+            var state = response.getState();
+            if (state === "SUCCESS"){
+                var result = response.getReturnValue();
+                var plValues = [];
+                for (var i = 0; i < result.length; i++) {
+                    plValues.push({
+                        label: result[i],
+                        value: result[i]
+                    });
+                }
+                component.set("v.GenreList", plValues);
+            }
+        });
+        $A.enqueueAction(action);
+    },
+   
+})
+************************
+.THIS .slds-leftpad{
+	padding-left: 2rem;
+}
+.THIS .iconheight{
+    top: 65%;
+}
+
+.THIS .leftspace input {
+    padding-left:2rem;
+}
+.THIS .Span{
+     height: 50px;
+}
+.THIS .slds-th__action{
+    color: #B71C1C;
+}
+.THIS .color{
+    color: #B71C1C;
+}
+*******************************
+
+Negative--------->
+<aura:component controller="CA_DatableClass" implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,lightning:availableForFlowScreens" access="global">
+  <aura:attribute name="callPlannerList" type="object"/>
+    <aura:attribute name="mycolumns" type="List"/>
+    <aura:attribute name="sortedBy" type="boolean" default="Schedule_Flag_Disable__c"/>
+    <aura:attribute name="sortedDirection" type="String" default="asc"/>
+    <aura:attribute name="openModal" type="boolean" default="false"/>
+    <aura:attribute name="selectesRec" type="Call_Plan_Data__c"/>
+     <aura:attribute name="selectesRec1" type="Contact"/>
+    <aura:attribute name="evtSubject" type="String" />
+    <aura:attribute name="ConId" type="String" default=""/>
+    <aura:attribute name="objectAPIName" type="string" default=""/>
+    <aura:attribute name="evtStart" type="DateTime"/>
+    <aura:attribute name="evtend" type="DateTime"/>
+    <aura:attribute name="evtType" type="String"/>
+    <aura:attribute name="eventRec" type="Event"/>
+    <aura:attribute name="fieldMap" type="Map"/>
+    <aura:attribute name="availDTP1Val" type="string"/>
+    <aura:attribute name="availDTP2Val" type="string"/>
+    <aura:handler name="init" value="{!this}" action="{!c.doInit}"/>
+    
+    <!--Declare Other topics Attributes-->
+    <aura:attribute name="GenreList" type="List" default="[]" description="Genre Picklist Values"/>
+    <aura:attribute name="selectedGenreList" type="List" default="[]" description="Selected Genre Picklist Values"/>
+    
+    <!-- Attributes Lookup -->
+    <aura:attribute name="contactId" type="Id" default=""/>
+     <!--<aura:handler name="lookupEvent" event="c:componentEvent" action="{!c.handleComponentEvent}"/>-->
+   <aura:handler name="oSelectedRecordEvent" event="c:TestCA_Event" action="{!c.handleComponentEvent}"/>
+    
+    <aura:attribute name="selectedLookUpRecord" type="sObject" default="{}"/>
+    <aura:attribute name="selectedAccountContacts" type="sObject" default="{}"/>
+     <aura:attribute name="dateValidationError" type="boolean" />
+    <aura:attribute name="dateValidationError1" type="boolean" />
+    
+    
+    <!--Datatable Component start-->
+    <div class="slds-card">
+        <!--Header Start-->
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                <div class="slds-media__figure">
+                    <lightning:Icon iconName="standard:call"  size="small" class="slds-icon slds-input__icon slds-input__icon_right " />
+                </div>
+                <div class="slds-media__body">
+                    <h2>
+                        <a href="javascript:void(0);" class="slds-card__header-link slds-truncate" title="Account List">
+                            <span class="slds-text-heading_small">Call Planning for Negative Account</span>
+                        </a>
+                    </h2>
+                </div>
+            </header>           
+        </div>
+        <!--Header end-->
+        <!--Datatable code Start-->
+        <lightning:card >
+            <lightning:datatable data="{!v.callPlannerList}" columns="{!v.mycolumns}" 
+                                 keyField="id" hideCheckboxColumn="true"
+                                 onsort="{!c.updateColumnSorting}"
+                                 sortedBy="{!v.sortedBy}" sortedDirection="{!v.sortedDirection}"
+                                 onrowaction="{!c.handleRowAction }" />
+        </lightning:card>
+        <!--Datatable code end-->
+    </div>
+    <!--Datatable Component end-->
+    <!-- Start Modal Code-->
+    
+    <aura:if isTrue="{!v.openModal}">
+        <!--Use aura:if tag to display/hide popup based on isModalOpen value-->                         
+        <!-- Modal/Popup Box starts here-->
+        
+        <section role="dialog" tabindex="-1" aria-labelledby="modal-heading-01" aria-modal="true" aria-describedby="modal-content-id-1" class="slds-modal slds-fade-in-open slds-modal_small">
+            <div  class="slds-modal__container">
+                <div class="slds-scrollable" style="scroll-behavior: auto;" >
+                    <!--loading spinner start-->
+                    <div class="slds-is-relative">
+                        <aura:if isTrue="{!v.spinner}">
+                            <div aura:id="spinnerId" class="slds-spinner_container">
+                                <div class="slds-spinner--brand  slds-spinner slds-spinner--medium slds-is-relative" role="alert">
+                                    <span class="slds-assistive-text">Loading</span>
+                                    <div class="slds-spinner__dot-a"></div>
+                                    <div class="slds-spinner__dot-b"></div>
+                                </div>
+                            </div>
+                        </aura:if>
+                        
+                        <!--Loading spinner end--> 
+                        
+                        <!-- Code -->
+                        <lightning:card>
+                            
+                            <div class="slds-p-around_small">
+                                <header class="slds-modal__header">
+                                    <!-- <lightning:buttonIcon iconName="utility:close"
+                                                      onclick="{! c.closeModal }"
+                                                      alternativeText="close"
+                                                      variant="bare-inverse"
+                                                      class="slds-modal__close"/>-->
+                                    <b><h2 id="modal-heading-01" class="color">New Event</h2></b>
+                                    
+                                </header>
+                                <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <!--Subject-->
+                                            <lightning:input aura:id="fieldId" name="evtSubject" label="Subject"  value="{!v.evtSubject}"/>
+                                        </span>
+                                    </div>
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <!-- Picklist Event type-->
+                                            <div class="form-group">
+                                                <lightning:select aura:id="validate" value="{!v.evtType}"  onchange="{!c.handleOnChange}" name="industryPicklist" 
+                                                                  label="Event Type" messageWhenValueMissing="Event Type is Mandatory" required="true">
+                                                    <option value="">--None--</option>
+                                                    <aura:iteration items="{!v.fieldMap}" var="i" indexVar="key">
+                                                        <option text="{!i.value}" value="{!i.key}" selected="{!i.key==v.evtType}" />
+                                                    </aura:iteration>
+                                                </lightning:select>
+                                            </div>
+                                            <!-- Picklist Event type-->
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <!--Start Datetime-->
+                                            <lightning:input aura:id="validate" type="Datetime" name="evtStart" label="Start Date" value="{!v.evtStart}" 
+                                                             messageWhenValueMissing="Start Date is Mandatory" required="true"  onchange="{!c.StartdateUpdate}" 
+                                                             class="{! v.dateValidationError ? 'slds-has-error' : ''}"/>
+                                            <aura:if isTrue="{!v.dateValidationError}">
+                                                <div class="slds-text-color_error slds-p-left_x-small">
+                                                    Start Date must be in present or in future date.
+                                                </div>
+                                            </aura:if>  
+                                        </span>
+                                    </div>
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <lightning:input aura:id="validate" type="Datetime" name="evtEnd" label="End Date" value="{!v.evtend}" 
+                                                             messageWhenValueMissing="End Date is Mandatory" required="true" onchange="{!c.EnddateUpdate}" 
+                                                             class="{! v.dateValidationError1 ? 'slds-has-error' : ''}"/>
+                                            <aura:if isTrue="{!v.dateValidationError1}">
+                                                <div class="slds-text-color_error slds-p-left_x-small">
+                                                    End Date should be greater than start date.
+                                                </div>
+                                            </aura:if>  
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <div class="slds-form-element__label">Account Name</div>
+                                            <div class="slds-box slds-box_xx-small" style="{!v.selectesRec.Account_Name__c}">
+                                                <aura:if isTrue="{!v.selectesRec.Account_Name__c}"  >
+                                                    <lightning:icon iconName="standard:account" size="small"></lightning:icon> &nbsp;&nbsp;
+                                                    {!v.selectesRec.Account_Name__c}
+                                                </aura:if>
+                                            </div>
+                                        </span>
+                                    </div>
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                         <!-- <c:CA_ContactLookup name="accountLookup"
+                                                                fieldLabel="Contact Name"
+                                                                childObjectApiName="Call_Plan_Data__c"
+                                                                targetFieldApiName="Doctor_Name__c"
+                                                                value="{!v.contactId}"
+                                                                addToRecent="true"
+                                                                aura:id="validate4"
+                                                                />-->
+                                             <c:CA_ParentComponent 
+                                                                  objectAPIName="Contact" 
+                                                                  IconName="standard:contact"
+                                                                  ConId="{!v.ConId}"
+                                                                  accountDetail="{!v.selectesRec.AccountId__c}"
+                                                                  selectedRecord="{!v.selectedLookUpRecord}"
+                                                                  label="Contact Name"/>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <lightning:input aura:id="fieldId" label='Dr1' value="{!v.selectesRec.Available_Doctor_P1__c}"  />
+                                        </span>
+                                    </div>
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <lightning:input aura:id="fieldId" label='Dr2' value="{!v.selectesRec.Available_Doctor_P2__c}"  />
+                                        </span>
+                                    </div>
+                                </div>  
+                                <div class="slds-grid slds-gutters slds-p-top_x-small slds-p-bottom_x-small">
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span class='Span'>
+                                            <div class="slds-form-element__label">Available Datetime1</div>
+                                            <div class="slds-box slds-box_xx-small" style="{!v.availDTP1Val}"  name="datetime1">
+                                                <lightning:formattedRichText value="{!v.availDTP1Val}" aura:id="Date1" class="d1"/>
+                                            </div>
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="slds-col slds-size_6-of-12">
+                                        <span>
+                                            <div class="slds-form-element__label">Available Datetime2</div>
+                                            <div class="slds-box slds-box_xx-small" style="{!v.availDTP2Val}">
+                                                <lightning:formattedRichText value="{!v.availDTP2Val}" aura:id="Date2"/>
+                                            </div>
+                                        </span>
+                                    </div>
+                                </div> 
+                                <lightning:dualListbox aura:id="selectGenre"
+                                                       name="Genre"
+                                                       label="Other Topics Covered"
+                                                       options="{!v.GenreList }"
+                                                       value="{!v.selectedGenreList}"
+                                                       onchange="{!c.handleGenreChange}"/>
+                                <footer class="slds-modal__footer">
+                                    <lightning:button iconName="utility:undo"
+                                                      iconPosition="right"
+                                                      variant="destructive-text" 
+                                                      label="Cancel"
+                                                      title="Cancel"
+                                                      onclick="{! c.closeModal }"/>
+                                    
+                                    <lightning:button iconName="utility:send"
+                                                      variant="destructive" 
+                                                      label="Done"
+                                                      title="Done"
+                                                      onclick="{!c.saveRecord }"/>
+                                </footer>
+                            </div>
+                        </lightning:card>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <div class="slds-backdrop slds-backdrop_open"></div>
+    </aura:if>
+    
+    <!--End Modal code-->
+    <!--Markup ends-->
+</aura:component>
+****************************
+({
+    saveRecord: function (cmp, event, helper) {
+         //Custom validation
+       var eventsfields = cmp.find("validate");
+        var blank =0;
+        if(eventsfields.length !=undefined ){
+            var allValid = eventsfields.reduce(function (validSoFar,inputCmp) {
+                inputCmp.showHelpMessageIfInvalid();
+                return validSoFar && inputCmp.get('v.validity').valid;
+            }, true);
+            if(!allValid){
+                blank++;
+            }
+        }else{
+            var allValid=eventsfields;
+            if(!allValid.get('v.validity').valid){
+                blank++;
+           }
+        }
+        /*validation 2*/
+       /*var eventsfields1 = cmp.get('v.ConId');
+       // alert(eventsfields1);
+        if(eventsfields1 == "" || eventsfields1 === undefined){
+            alert('Contact Name is Mandatory');
+            return;
+        }
+        
+        var eventsfields1 = cmp.get("v.ConId");*/
+        //eventsfields1.reportValidity();
+        // cmp.set("v.openModal",false);
+        //alert(cmp.get("v.evtSubject"));
+        if(blank == 0 ){
+        //cmp.set("v.openModal",false);
+        //alert(cmp.get("v.evtSubject"));
+        var action = cmp.get("c.insertEvt");
+        //Contact Id
+       // alert('Conatct Id -->'+ cmp.get('v.ConId'));
+        //alert(cmp.get("v.selectesRec1.Id"));
+                //Multislect picklist ; split
+        var test =cmp.get("v.selectedGenreList").join('; ');
+        action.setParams({
+            callPlanRec : JSON.stringify(cmp.get("v.selectesRec")),
+            //con :cmp.get("v.selectesRec1.Id"),
+            eventsub : cmp.get("v.evtSubject"),
+            strtdate : cmp.get("v.evtStart"),
+            enddate : cmp.get("v.evtend"),
+            eventtype : cmp.get("v.evtType"),
+            topics : test,
+        });
+        
+        action.setCallback(this,function(response){
+            var state = response.getState();
+            if(state === "SUCCESS"){
+                var toastEvent = $A.get("e.force:showToast");
+                toastEvent.setParams({
+                    title : 'Success',
+                    message: 'Event record has been created successfully.',
+                    duration:' 5000',
+                    key: 'info_alt',
+                    type: 'success',
+                    mode: 'pester'
+                });
+                $A.get('e.force:refreshView').fire(); 
+                toastEvent.fire();
+            }
+            else if(state === "ERROR"){
+                var errors = action.getError();
+                if (errors) {
+                    if (errors[0] && errors[0].message) {
+                        alert(errors[0].message);
+                       // alert('Fail');
+                    }
+                }
+            }
+        });       
+        $A.enqueueAction(action);
+        }
+    },
+    
+    updateColumnSorting: function (cmp, event, helper) {
+        var fieldName = event.getParam('fieldName');
+        var sortDirection = event.getParam('sortDirection');
+        cmp.set("v.sortedBy", fieldName);
+        cmp.set("v.sortedDirection", sortDirection);
+        helper.sortData(cmp, fieldName, sortDirection);
+    },
+    //Contact lookup mapped start
+   /* handleComponentEvent : function(cmp, event, helper) {
+        cmp.set("v.contactId", event.getParam("recordId"));
+       // alert(cmp.get('v.contactId') );
+       var eventsfields1 = cmp.get('v.contactId');
+        if(eventsfields1 === undefined || eventsfields1 == "" ){
+            alert('Contact Name is Mandatory');
+            return;
+        }
+        //
+        var addNewVal = cmp.get('v.selectesRec');
+        addNewVal['Doctor_Name__c'] = event.getParam("recordId"); 
+        cmp.set('v.selectesRec',addNewVal);
+    },*/
+   handleComponentEvent : function(cmp, event, helper) {
+      cmp.set("v.ConId", event.getParam("recordByEventRec"));
+      //alert('Conatct Id -->'+ cmp.get('v.ConId'));
+      //alert(event.getParam("recordByEventRec"));
+      /* var eventsfields1 = cmp.get('v.ConId');
+        if(eventsfields1 === undefined || eventsfields1 == "" ||eventsfields1 == null){
+            alert('Contact Name is Mandatory');
+            return;
+        }*/
+        var addNewVal = cmp.get('v.selectesRec');
+        addNewVal['Doctor_Name__c'] = event.getParam("recordByEventRec").Id;  
+        cmp.set('v.selectesRec',addNewVal);
+    },
+
+    //Contact lookup mapped end
+    
+    handleRowAction :function(cmp,event,helper){
+        //action gives which action performed
+        var action = event.getParam('action');
+        //row gives complete row information
+        var row = event.getParam('row');
+        cmp.set('v.selectesRec',row);
+        console.log('*****row:'+JSON.stringify(row));
+        console.log(JSON.stringify(action));
+        
+        console.log('You have selected View Action for '+row.Name+'(id='+row.Id+')');
+        cmp.set("v.openModal",true);
+        /*Split Code*/
+        if(row.Doc1_Available_Datetime__c!=null){
+            var splitVal1 = row.Doc1_Available_Datetime__c.replaceAll(" ", "<br/>");
+            var  splitVal01 = splitVal1.replace(/(<br\s*\/?>){2,}/gi, '<br>');
+            cmp.set("v.availDTP1Val",splitVal01);       
+        }
+        
+        /*Split Code*/ 
+        if(row.Doc_2_Available_Datetime__c!=null){
+            var splitVal2 = row.Doc_2_Available_Datetime__c.replaceAll(" ", "<br>");
+            var  splitVal01 = splitVal1.replace(/(<br\s*\/?>){2,}/gi, '<br>');
+            cmp.set("v.availDTP2Val",splitVal01);           
+        }
+    },
+    
+    closeModal :function(cmp,event,helper){
+        cmp.set("v.openModal",false);
+    },
+    
+    doInit : function(component, event, helper) {
+        helper.getPicklistValues(component, event);
+        helper.getTopicsValues(component, event);
+        component.set('v.mycolumns', [
+            {label:'Action',type:  'button',typeAttributes:
+             {iconName: 'utility:view',label: 'Schedule',name: 'viewRecord', disabled :false,value: 'viewBtn',variant:{ fieldName: 'buttonColor'}},"initialWidth": 150
+            },
+            {label: 'Priority', fieldName: 'Priority__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Account Name', fieldName: 'linkName', type: 'url', 
+             typeAttributes: {label: { fieldName: 'Account_Name__c' }, target: '_blank'},"initialWidth": 150},
+            {label: 'Last Call Date', fieldName: 'Last_Call_Date_Formula__c', type: 'text', sortable: true,"initialWidth": 150},
+            {label: 'Completed Call of This Month', fieldName: 'Call_of_This_Month__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Incoming Call of This Month', fieldName: 'Incoming_Call_of_This_Month__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Call Frequency', fieldName: 'Call_Frequency_Monthly__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Segment', fieldName: 'Cataract_Segment__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Procedures', fieldName: 'Medicare_Procedure__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Predicted Sales(Monthly)', fieldName: 'Predicted_IOL_Sales_Amount__c', type: 'currency',sortable: true,"initialWidth": 150},
+            {label: 'Sales(Monthly)', fieldName: 'IOL_sales__c', type: 'currency',sortable: true,"initialWidth": 150},
+            {label: 'JnJ Share', fieldName: 'JNJ_IOL_share__c', type: 'Number',sortable: true,"initialWidth": 150},
+            {label: 'Dr1', fieldName: 'Available_Doctor_P1__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Available Datetime1', fieldName: 'Doc1_Available_Datetime__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Dr2', fieldName: 'Available_Doctor_P2__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Available Datetime2', fieldName: 'Doc_2_Available_Datetime__c', type: 'text',sortable: true,"initialWidth": 150},
+            {label: 'Address', fieldName: 'Account_Addess__c', type: 'text',sortable: true,"initialWidth": 150},
+        ]);
+            helper.fetchNegativesAccounts( component );  
+            },
+            //handle Event type Picklist Selection
+            handleOnChange : function(component, event, helper) {
+            var EventType = component.get("v.evtType");
+            },
+            //Topics code
+            handleGenreChange: function (component, event, helper) {
+            //Get the Selected values   
+            var selectedValues = component.get("v.selectedGenreList");
+            //var stringify = JSON.parse(JSON.stringify(component.get("v.selectedGenreList")));
+            //Update the Selected Values  
+            component.set("v.selectedGenreList", selectedValues);
+            },
+            
+            /*StartdateUpdate validation*/
+            /*call dateUpdate function on onchange event on date field*/ 
+            StartdateUpdate : function(component, event, helper) {
+            
+            var today = new Date();        
+            var dd = today.getDate();
+            var mm = today.getMonth() + 1; //January is 0!
+            var yyyy = today.getFullYear();
+            // if date is less then 10, then append 0 before date   
+            if(dd < 10){
+            dd = '0' + dd;
+            } 
+            // if month is less then 10, then append 0 before date    
+            if(mm < 10){
+            mm = '0' + mm;
+            }
+            
+            var todayFormattedDate = yyyy+'-'+mm+'-'+dd;
+            if(component.get("v.evtStart") != '' && component.get("v.evtStart") < todayFormattedDate){
+            component.set("v.dateValidationError" , true);
+            }else{
+            component.set("v.dateValidationError" , false);
+            }
+            },
+            
+            /*EnddateUpdate validation*/
+            EnddateUpdate: function(component, event, helper) {
+            
+            var today = new Date();        
+            var dd = today.getDate();
+            var mm = today.getMonth() + 1; //January is 0!
+            var yyyy = today.getFullYear();
+            // if date is less then 10, then append 0 before date   
+            if(dd < 10){
+            dd = '0' + dd;
+            } 
+            // if month is less then 10, then append 0 before date    
+            if(mm < 10){
+            mm = '0' + mm;
+            }
+            
+            var todayFormattedDate = yyyy+'-'+mm+'-'+dd;
+            if((component.get("v.evtend") != '' && component.get("v.evtend") < todayFormattedDate) || component.get("v.evtend") <= component.get("v.evtStart")){
+            component.set("v.dateValidationError1" , true);
+            }else{
+            component.set("v.dateValidationError1" , false);
+            }
+            
+            },
+            
+            })
+			***********************************
+			({
+    sortData: function (cmp, fieldName, sortDirection) {
+        var data = cmp.get("v.callPlannerList");
+        var reverse = sortDirection !== 'asc';
+        data.sort(this.sortBy(fieldName, reverse))
+        cmp.set("v.callPlannerList", data);
+    }, 
+    
+    getPicklistValues: function(component, event) {
+        var action = component.get("c.getEventtypeFieldValue");
+        action.setCallback(this, function(response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                var result = response.getReturnValue();
+                var fieldMap = [];
+                for(var key in result){
+                    fieldMap.push({key: key, value: result[key]});
+                }
+                component.set("v.fieldMap", fieldMap);
+            }
+        });
+        $A.enqueueAction(action);
+    },
+    
+    sortBy: function (field, reverse, primer) {
+        var key = primer ? function(x) {return primer(x[field])} : function(x) {return x[field]};
+        //checks if the two rows should switch places
+        reverse = !reverse ? 1 : -1;
+        return function (a, b) {
+            return a = key(a), b = key(b), reverse * ((a > b) - (b > a));
+        }
+    },
+    
+    //Button code
+    fetchNegativesAccounts : function( component ) {
+        var action = component.get("c.getCallPlannerNegativeRec");
+        action.setParams({
+        });
+        action.setCallback(this, function(response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                var records =response.getReturnValue();
+                component.set("v.callPlannerList", response.getReturnValue());
+                records.forEach(function(record){
+                    //record.linkName = '/'+record.AccountId__c;
+                    record['linkName'] = '/lightning/r/Account/' +record['AccountId__c'] +'/view';
+                });
+                 for ( var i = 0; i < records.length; i++ ) {  
+                 if (records[i].Call_Target_Meet__c == 1) {
+                        records[i].buttonColor = 'destructive';  
+                    }
+                    else  
+                        records[i].buttonColor = 'destructive-text'; 
+                }  
+                component.set("v.callPlannerList", records);
+            }
+        });
+        $A.enqueueAction(action);
+    },
+    
+    //Topics code
+    getTopicsValues: function(component, event, helper) {
+        var action = component.get("c.getPiklistValues");
+        action.setCallback(this, function(response) {
+            var state = response.getState();
+            if (state === "SUCCESS"){
+                var result = response.getReturnValue();
+                var plValues = [];
+                for (var i = 0; i < result.length; i++) {
+                    plValues.push({
+                        label: result[i],
+                        value: result[i]
+                    });
+                }
+                component.set("v.GenreList", plValues);
+            }
+        });
+        $A.enqueueAction(action);
+    },
+    /*Lookup validation
+    validateFields: function(component,event){
+        var isValid = true;
+        // get lookup value 
+        var lVal = component.get("v.selectedLookUpRecord");  
+        if(lVal.Id == undefined){
+            isValid = false ;
+            alert('Lookup field is required...Please select contact');
+        }
+        return isValid;
+    },*/
+})
+**************************************************
+.THIS .slds-th__action{
+    color: #B71C1C;
+}
+.THIS .color{
+    color: #B71C1C;
+}
+*************************************************
+Dependent contact Lookup-------->
+
+CA_ParentComponent --------->
+
+<aura:component controller="TestCA_LookUp" implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,forceCommunity:availableForAllPageTypes,force:lightningQuickAction" access="global">
+   <aura:attribute name="selectedRecord" type="sObject" default="{}" description="Use,for store SELECTED sObject Record"/>
+    <aura:attribute name="listOfSearchRecords" type="List" description="Use,for store the list of search records which returns from apex class"/>
+    <aura:attribute name="SearchKeyWord" type="string"/>
+    <aura:attribute name="objectAPIName" type="string" default=""/>
+    <aura:attribute name="IconName" type="string" default=""/>
+    <aura:attribute name="label" type="string" default=""/>
+    <aura:attribute name="Message" type="String" default=""/>
+    <aura:attribute name="ConId" type="String" default=""/>
+    <aura:attribute name="accountDetail" type="string"/>
+    <aura:attribute name="contactId" type="string"/>
+    <aura:attribute name="childObjectApiName" type="String" default=""/>
+    <aura:attribute name="targetFieldApiName" type="String" default=""/>
+    
+    <aura:handler name="oSelectedRecordEvent" event="c:TestCA_Event" action="{!c.handleComponentEvent}"/>
+    
+    <div onmouseleave="{!c.onblur}" aura:id="searchRes" class="slds-form-element slds-lookup slds-is-close" data-select="single">
+        <label class="slds-form-element__label" for="lookup-348">{!v.label}</label>
+        <div class="slds-form-element__control">
+            
+            <div class="slds-input-has-icon slds-input-has-icon--right">
+                <div aura:id="lookup-pill" class="slds-pill-container slds-hide">
+                    <lightning:pill class="pillSize" label="{!v.selectedRecord.Name}" name="{!v.selectedRecord.Name}" onremove="{! c.clear }">
+                        <aura:set attribute="media">
+                            <lightning:icon iconName="{!v.IconName}" size="x-small" alternativeText="{!v.IconName}"/>
+                        </aura:set>
+                    </lightning:pill>
+                </div>
+                <div aura:id="lookupField" class="slds-show">
+                    <lightning:icon class="slds-input__icon slds-show" iconName="utility:search" size="x-small" alternativeText="search"/>
+                    <span class="slds-icon_container  slds-combobox__input-entity-icon" title="record">
+                       <!-- <lightning:icon class="slds-icon slds-icon slds-icon_small slds-icon-text-default" iconName="{!v.IconName}" size="x-small" alternativeText="icon"/>-->
+                        <span class="slds-assistive-text"></span>
+                    </span>
+                    <ui:inputText click="{!c.onfocus}" updateOn="keyup" keyup="{!c.keyPressController}" class="slds-lookup__search-input slds-input leftPaddingClass" value="{!v.SearchKeyWord}" />
+                </div>  
+            </div>
+        </div>
+        <ul style="min-height:40px;margin-top:0px !important" class="slds-listbox slds-listbox_vertical slds-dropdown slds-dropdown_fluid slds-lookup__menu slds" role="listbox">
+            <lightning:spinner class="slds-hide" variant="brand" size="small" aura:id="mySpinner"/>
+            <center> {!v.Message}</center>
+            <aura:iteration items="{!v.listOfSearchRecords}" var="singleRec">
+                <c:TestCA_customLookupResult oRecord="{!singleRec}" IconName="{!v.IconName}"/>
+            </aura:iteration>
+        </ul>
+    </div>
+</aura:component>
+*******************
+({
+    onfocus : function(component,event,helper){
+        $A.util.addClass(component.find("mySpinner"), "slds-show");
+        var forOpen = component.find("searchRes");
+        $A.util.addClass(forOpen, 'slds-is-open');
+        $A.util.removeClass(forOpen, 'slds-is-close');
+        var getInputkeyWord = '';
+        helper.searchHelper(component,event,getInputkeyWord);
+    },
+    onblur : function(component,event,helper){      
+        component.set("v.listOfSearchRecords", null );
+        var forclose = component.find("searchRes");
+        $A.util.addClass(forclose, 'slds-is-close');
+        $A.util.removeClass(forclose, 'slds-is-open');
+    },
+    keyPressController : function(component, event, helper) {
+        var getInputkeyWord = component.get("v.SearchKeyWord");
+        if( getInputkeyWord.length > 0 ){
+            var forOpen = component.find("searchRes");
+            $A.util.addClass(forOpen, 'slds-is-open');
+            $A.util.removeClass(forOpen, 'slds-is-close');
+            helper.searchHelper(component,event,getInputkeyWord);
+        }
+        else{  
+            component.set("v.listOfSearchRecords", null );
+            var forclose = component.find("searchRes");
+            $A.util.addClass(forclose, 'slds-is-close');
+            $A.util.removeClass(forclose, 'slds-is-open');
+        }
+    },
+    
+    clear :function(component,event,heplper){
+        var pillTarget = component.find("lookup-pill");
+        var lookUpTarget = component.find("lookupField");
+        
+        $A.util.addClass(pillTarget, 'slds-hide');
+        $A.util.removeClass(pillTarget, 'slds-show');
+        
+        $A.util.addClass(lookUpTarget, 'slds-show');
+        $A.util.removeClass(lookUpTarget, 'slds-hide');
+        
+        component.set("v.SearchKeyWord",null);
+        component.set("v.listOfSearchRecords", null );
+        component.set("v.selectedRecord", {} );  
+    },
+    
+    handleComponentEvent : function(component, event, helper) {
+        //alert(component.get('v.accountDetail'));
+        var selectedAccountGetFromEvent = event.getParam("recordByEvent");
+        component.set("v.selectedRecord" , selectedAccountGetFromEvent);
+        var objName = component.get('v.objectAPIName')
+        if(objName =="Contact"){
+            component.set("v.ConId",component.get('v.selectedRecord.Id'));
+        }
+        console.log('accName-Id', component.get("v.ConId"));
+        
+        var forclose = component.find("lookup-pill");
+        $A.util.addClass(forclose, 'slds-show');
+        $A.util.removeClass(forclose, 'slds-hide');
+        
+        var forclose = component.find("searchRes");
+        $A.util.addClass(forclose, 'slds-is-close');
+        $A.util.removeClass(forclose, 'slds-is-open');
+        
+        var lookUpTarget = component.find("lookupField");
+        $A.util.addClass(lookUpTarget, 'slds-hide');
+        $A.util.removeClass(lookUpTarget, 'slds-show');  
+        
+    },
+})
+**********************
+({
+    searchHelper : function(component,event,getInputkeyWord) {
+        var action = component.get("c.fetchLookUpValues");
+         
+        action.setParams({
+            'searchKeyWord': getInputkeyWord,
+            'ObjectName' : component.get("v.objectAPIName"),
+            'accountId' : component.get("v.accountDetail"),
+        });
+        action.setCallback(this, function(response) {
+            $A.util.removeClass(component.find("mySpinner"), "slds-show");
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                var storeResponse = response.getReturnValue();
+                if (storeResponse.length == 0) {
+                    component.set("v.Message", 'Contact does not belong to this Account please select associated contact from below list');
+                } else {
+                    component.set("v.Message", '');
+                }
+                component.set("v.listOfSearchRecords", storeResponse);
+            }
+        });
+        $A.enqueueAction(action);
+        
+    },
+})
+**************************
+
+TestCA_customLookupResult--->
+
+<aura:component implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,forceCommunity:availableForAllPageTypes,force:lightningQuickAction" access="global">
+    <aura:attribute name="oRecord" type="sObject" />
+    <aura:attribute name="IconName" type="string"/>
+    
+    <!--Register the component level event sObject-->
+    <aura:registerEvent name="oSelectedRecordEvent" type="c:TestCA_Event"/>
+    
+    <li role="presentation" class="slds-listbox__item" onclick="{!c.selectRecord}">
+        <span id="listbox-option-unique-id-01" class="slds-media slds-listbox__option slds-listbox__option_entity slds-listbox__option_has-meta" role="option">
+            <span class="slds-media__figure">
+                <span class="slds-icon_container" title="Description of icon when needed">
+                    <lightning:icon iconName="{!v.IconName}" class="slds-icon slds-icon_small" size="small" alternativeText="icon"/>
+                    <span class="slds-assistive-text">Description of icon</span>
+                </span>
+            </span>    
+            <span class="slds-media__body">  
+                <span class="slds-listbox__option-text slds-listbox__option-text_entity">{!v.oRecord.Name}</span>
+            </span>
+        </span>
+    </li>
+</aura:component>
+********************************
+({
+  selectRecord : function(component, event, helper){      
+      var getSelectRecord = component.get("v.oRecord");
+      //alert('inside child lookup cmp'+ getSelectRecord);
+      var compEvent = component.getEvent("oSelectedRecordEvent");
+         compEvent.setParams({"recordByEvent" : getSelectRecord,
+                              "recordByEventRec": getSelectRecord});  
+         compEvent.fire();
+    },
+})
+*******************************
+TestCA_Event---->
+
+<aura:event type="COMPONENT" description="by this event we are pass the selected sObject(lookup list record) in the parent component">
+    <aura:attribute name="recordByEvent" type="string"/>
+    <aura:attribute name="recordByEventRec" type="sObject"/>
+</aura:event>
+********************************
+
+
+All Contact List---------->
+CA_ContactLookup-------->
+
+<aura:component controller="CA_DatableClass" implements="force:lightningQuickAction" access="global">
+    
+    <!-- Attributes -->
+    <aura:attribute name="name" type="String" default=""/>
+    <aura:attribute name="variantLabel" type="String" default="label-hidden"/>
+    <aura:attribute name="fieldLabel" type="String" default="Contact Name is Mandatory"/>
+    <aura:attribute name="childObjectApiName" type="String" default=""/>
+    <aura:attribute name="targetFieldApiName" type="String" default=""/>
+    <aura:attribute name="value" type="String" default=""/>
+    <aura:attribute name="required" type="Boolean" default="true"/>
+    <aura:attribute name="addToRecent" type="Boolean" default="false"/>
+    <aura:attribute name="accountDetail" type="string" default=""/>
+    <aura:attribute name="messageWhenValueMissing" type="string" default="Contact Name is Mandatory"/>
+    
+   <aura:attribute name="selectedRecord" type="sObject" default="{}" description="Use,for store SELECTED sObject Record"/>
+   <!--<aura:attribute name="selectedLookUpRecord" type="sObject" default="{}"/>-->
+    <aura:attribute name="loading" type="Boolean" default="false" />
+    <!-- Register Event -->
+    <aura:registerEvent name="lookupEvent" type="c:componentEvent"/>
+    
+    <lightning:recordEditForm objectApiName="{!v.childObjectApiName}">
+        
+         <div class="slds-form-element">
+            <aura:if isTrue="{!v.required}">
+                <label class="slds-float_left"><abbr title="required" class="slds-required">*</abbr>{!v.fieldLabel}</label>
+                <aura:set attribute="else">
+                    <label class="slds-float_left">{!v.fieldLabel}</label>
+                </aura:set>
+            </aura:if>
+           <div class="slds-form-element__control">
+                <lightning:inputField
+                                      aura:id="lookupField"
+                                      variant="{!v.variantLabel}"
+                                      fieldName="{!v.targetFieldApiName}"
+                                      value="{!v.value}"
+                                      required="{!v.required}"
+                                      onchange="{!c.handleChange}"
+                                      messageWhenValueMissing="{!v.messageWhenValueMissing}"
+                                      />
+            </div>
+        </div>
+        
+    </lightning:recordEditForm>
+    
+</aura:component>
+****************************************
+({
+    handleChange: function(component, event, helper) {
+        /* var eventsfields1 = component.find("lookupField");
+        
+        if(eventsfields1.length === undefined){
+            alert('contact field is blank');
+           // return;
+        }*/
+            let selectedValue = component.get("v.value");
+            console.log(selectedValue);
+            //Send the recordId to "Example Component"
+            let componentEvent = component.getEvent("lookupEvent");
+            componentEvent.setParams({
+                "recordId" : selectedValue[0],
+                
+            });
+            componentEvent.fire();
+            
+            //Add to recent list
+            if(component.get("v.addToRecent") === false) {
+                alert('Account Id '+component.get("v.accountDetail"));
+                if(selectedValue !== undefined) {
+                    if (selectedValue.length > 0 && selectedValue[0].length > 0) {
+                        let action = component.get("c.setObjectToRecentItems");
+                        action.setParams({
+                            "recordId": selectedValue[0],
+                            "accountId" : component.get("v.accountDetail")
+                        });
+                        
+                        $A.enqueueAction(action);
+                    }
+                }
+            }
+         
+        },
+});
+******************************
+componentEvent-------->
+<aura:event type="COMPONENT">
+    <aura:attribute name="recordId" type="String" />
+</aura:event>
+*****************************************
